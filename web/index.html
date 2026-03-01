@@ -1,10 +1,109 @@
 <!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Email Filing</title>
-<style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');:root{--bg1:#eff3fa;--bg2:#dbe8fb;--panel:#0b1220;--panel2:#111a2b;--card:#ffffffd9;--line:#cfdaef;--muted:#5f6f86;--accent:#2f6df6}*{box-sizing:border-box}body{margin:0;font-family:'IBM Plex Sans',sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2)) fixed}.layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;background:linear-gradient(180deg,var(--panel),var(--panel2));padding:12px}.brand{color:#dbe7ff;font-weight:700;margin:6px 0 12px}.nav a{display:block;color:#bfd0f0;text-decoration:none;padding:8px 10px;border-radius:10px;margin-bottom:4px;font-weight:600}.nav a.active,.nav a:hover{background:#1f2d46;color:#fff}.tog{margin-top:10px;width:100%;padding:8px;border-radius:10px;border:1px solid #2f4264;background:#16243a;color:#d9e7ff}.main{padding:12px 14px 18px}.stat-grid{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:8px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}.stat-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace}.stat-value{font-size:1.05rem;font-weight:700}.search{display:flex;gap:8px;margin-top:8px}.search input{flex:1;padding:9px;border:1px solid #cbd5e1;border-radius:999px}.search button{padding:9px 12px;border:none;border-radius:999px;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;font-weight:600}.filters{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.chip{padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-size:.78rem;text-decoration:none;color:#54657d;background:#fff}.chip.active{background:#0f172a;color:#fff;border-color:#0f172a}.sections{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(280px,1fr);gap:10px}.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px}.badge{font-size:.68rem;background:#e6ecff;color:#3746a0;padding:2px 8px;border-radius:999px;display:inline-block}.tag{font-size:.68rem;background:#e2e8f0;padding:2px 6px;border-radius:6px}.actions{display:flex;gap:6px;margin-top:auto}.pill{flex:1;text-align:center;padding:6px;border-radius:999px;font-size:.74rem;text-decoration:none;border:1px solid var(--line)}.pill.primary{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;border:none}.pill.secondary{color:var(--accent);background:#fff}.muted{color:var(--muted)}</style></head>
-<body><div class="layout"><aside class="sidebar"><div class="brand">Dom Organiser Hub</div><nav class="nav"><a href="/">Hub</a><a href="/tools/email-filing" class="active">Email Filing</a><a href="/tools/processes">Processes</a><a href="/tools/calendar">Calendar</a><a href="/tools/notes">Notes</a></nav><button class="tog" onclick="toggleDense()">Toggle density</button></aside>
-<main class="main"><h1 style="margin:0">Email Filing</h1><p class="muted">{{ stats.attachments }} attachments · {{ stats.chunks }} chunks · Last ingest {{ stats.latest or 'N/A' }}</p>
-<div class="stat-grid"><div class="card"><div class="stat-label">Storage</div><div class="stat-value">{{ (stats.storage / (1024*1024)) | round(1) }} MB</div></div><div class="card"><div class="stat-label">Senders</div><div class="stat-value">{{ stats.senders|length }}</div></div><div class="card"><div class="stat-label">Categories</div><div class="stat-value">{{ stats.categories|length }}</div></div></div>
-<form class="search" method="get" action="/tools/email-filing"><input type="text" name="q" value="{{ query }}" placeholder="Search attachments" /><input type="hidden" name="category" value="{{ category }}" /><input type="hidden" name="sender" value="{{ sender }}" /><input type="hidden" name="tag" value="{{ tag }}" /><button type="submit">Search</button></form>
-<div class="filters"><a class="chip{% if not category %} active{% endif %}" href="/tools/email-filing?q={{ query }}&sender={{ sender }}&tag={{ tag }}">All categories</a>{% for row in stats.categories %}{% set cat = row['category'] or 'Unsorted' %}<a class="chip{% if category == cat %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }} ({{ row['c'] }})</a>{% endfor %}</div>
-<div class="sections"><section><div class="results">{% if results %}{% for result in results %}<article class="card" style="display:flex;flex-direction:column;gap:6px"><div class="badge">{{ result.category or 'Unsorted' }}</div><div class="muted" style="font-size:.74rem">{{ '{:.3f}'.format(result.score) }}</div><strong>{{ result.message_subject or '(no subject)' }}</strong><div class="muted" style="font-size:.74rem">{{ result.message_date }} · {{ result.message_sender }}</div><p style="font-size:.8rem;margin:0">{{ result.snippet }}</p>{% if result.tags %}<div>{% for tag in result.tags %}<span class="tag">{{ tag }}</span> {% endfor %}</div>{% endif %}<div class="actions"><a class="pill primary" href="/attachment/{{ result.attachment_id }}">View text</a><a class="pill secondary" href="/preview/{{ result.attachment_id }}" target="_blank">Open original</a></div></article>{% endfor %}{% elif query %}<p class="muted">No results.</p>{% else %}<p class="muted">Enter a search to browse attachments.</p>{% endif %}</div></section>
-<aside><div class="card"><h3 style="margin:0 0 6px">Buckets</h3>{% for row in stats.categories %}{% set cat = row['category'] or 'Unsorted' %}<div style="display:flex;justify-content:space-between;font-size:.8rem;margin:4px 0"><a href="/tools/email-filing?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}" style="text-decoration:none;color:#0f172a">{{ cat }}</a><span>{{ row['c'] }}</span></div>{% endfor %}</div><div class="card"><h3 style="margin:0 0 6px">Top senders</h3>{% for row in stats.senders %}{% if row['sender'] %}<div style="display:flex;justify-content:space-between;font-size:.8rem;margin:4px 0"><a href="/tools/email-filing?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}" style="text-decoration:none;color:#0f172a">{{ row['sender'] }}</a><span>{{ row['c'] }}</span></div>{% endif %}{% endfor %}</div></aside></div>
-</main></div><script>(function(){if(localStorage.getItem('denseMode')==='1')document.body.classList.add('dense')})();function toggleDense(){document.body.classList.toggle('dense');localStorage.setItem('denseMode',document.body.classList.contains('dense')?'1':'0');}</script></body></html>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+:root{--bg1:#eff3fa;--bg2:#dbe8fb;--panel:#0b1220;--panel2:#111a2b;--card:#ffffffd9;--line:#cfdaef;--muted:#5f6f86;--accent:#2f6df6}
+*{box-sizing:border-box}
+body{margin:0;font-family:'IBM Plex Sans',sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2)) fixed}
+.layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;background:linear-gradient(180deg,var(--panel),var(--panel2));padding:12px}
+.brand{color:#dbe7ff;font-weight:700;margin:6px 0 12px}
+.nav a{display:block;color:#bfd0f0;text-decoration:none;padding:8px 10px;border-radius:10px;margin-bottom:4px;font-weight:600}
+.nav a.active,.nav a:hover{background:#1f2d46;color:#fff}
+.main{padding:12px 14px 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+.muted{color:var(--muted)}
+.search-wrap{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.search-wrap input{width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:.95rem}
+.search-wrap button{padding:11px 14px;border:none;border-radius:10px;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;font-weight:700}
+.pill-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pill{padding:5px 10px;border-radius:999px;border:1px solid var(--line);font-size:.78rem;text-decoration:none;background:#fff;color:#42526b}
+.pill.active{background:#0f172a;color:#fff;border-color:#0f172a}
+.sections{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(300px,1fr);gap:10px;margin-top:10px}
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:8px}
+.result{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.badge{font-size:.68rem;background:#e6ecff;color:#3746a0;padding:2px 8px;border-radius:999px;display:inline-block}
+.tag{font-size:.68rem;background:#e2e8f0;padding:2px 6px;border-radius:6px}
+.actions{display:flex;gap:6px;margin-top:auto}
+.pillbtn{flex:1;text-align:center;padding:6px;border-radius:999px;font-size:.74rem;text-decoration:none;border:1px solid var(--line)}
+.pillbtn.primary{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;border:none}
+.pillbtn.secondary{color:var(--accent);background:#fff}
+.kv{display:flex;justify-content:space-between;font-size:.8rem;margin:4px 0}
+.kv a{text-decoration:none;color:#0f172a}
+</style></head>
+<body><div class="layout"><aside class="sidebar"><div class="brand">Dom Organiser Hub</div><nav class="nav"><a href="/">Hub</a><a href="/tools/email-filing" class="active">Email Filing</a><a href="/tools/processes">Processes</a><a href="/tools/calendar">Calendar</a><a href="/tools/notes">Notes</a></nav></aside>
+<main class="main">
+  <h1 style="margin:0">Email Filing</h1>
+  <p class="muted">Open search + pill filters. Example: click <strong>Invoice</strong>, then click <strong>Milk</strong>.</p>
+
+  <section class="card">
+    <form class="search-wrap" method="get" action="/tools/email-filing">
+      <input type="text" name="q" value="{{ query }}" placeholder="Search attachments, supplier names, subjects, amounts..." />
+      <button type="submit">Search</button>
+      <input type="hidden" name="category" value="{{ category }}" />
+      <input type="hidden" name="sender" value="{{ sender }}" />
+      <input type="hidden" name="tag" value="{{ tag }}" />
+    </form>
+
+    <div class="pill-row">
+      <a class="pill{% if not tag %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ category }}&sender={{ sender }}">All types</a>
+      {% for row in stats.tags %}
+      <a class="pill{% if tag == row['tag'] %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ category }}&sender={{ sender }}&tag={{ row['tag'] }}">{{ row['tag'] }} ({{ row['c'] }})</a>
+      {% endfor %}
+    </div>
+
+    <div class="pill-row">
+      <a class="pill{% if not sender %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ category }}&tag={{ tag }}">All suppliers</a>
+      {% for row in stats.senders %}
+      {% if row['sender'] %}
+      {% set short = row['sender'].split('@')[0].split('<')[0].strip() %}
+      <a class="pill{% if sender == row['sender'] %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ short[:18] }} ({{ row['c'] }})</a>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="pill-row">
+      <a class="pill{% if not category %} active{% endif %}" href="/tools/email-filing?q={{ query }}&sender={{ sender }}&tag={{ tag }}">All categories</a>
+      {% for row in stats.categories %}{% set cat = row['category'] or 'Unsorted' %}
+      <a class="pill{% if category == cat %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }} ({{ row['c'] }})</a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="sections">
+    <section>
+      <div class="results">
+        {% if results %}
+          {% for result in results %}
+          <article class="result">
+            <div class="badge">{{ result.category or 'Unsorted' }}</div>
+            <div class="muted" style="font-size:.74rem">score {{ '{:.3f}'.format(result.score) }}</div>
+            <strong>{{ result.message_subject or '(no subject)' }}</strong>
+            <div class="muted" style="font-size:.74rem">{{ result.message_date }} · {{ result.message_sender }}</div>
+            <p style="font-size:.8rem;margin:0">{{ result.snippet }}</p>
+            {% if result.tags %}<div>{% for t in result.tags %}<span class="tag">{{ t }}</span> {% endfor %}</div>{% endif %}
+            <div class="actions"><a class="pillbtn primary" href="/attachment/{{ result.attachment_id }}">View text</a><a class="pillbtn secondary" href="/preview/{{ result.attachment_id }}" target="_blank">Open original</a></div>
+          </article>
+          {% endfor %}
+        {% elif query or tag or sender or category %}
+          <p class="muted">No results for current filters. Try clearing pills.</p>
+        {% else %}
+          <p class="muted">Type a search or press pills to filter.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <aside>
+      <div class="card"><h3 style="margin:0 0 6px">Quick counts</h3>
+        <div class="kv"><span>Attachments</span><strong>{{ stats.attachments }}</strong></div>
+        <div class="kv"><span>Chunks</span><strong>{{ stats.chunks }}</strong></div>
+        <div class="kv"><span>Storage</span><strong>{{ (stats.storage / (1024*1024)) | round(1) }} MB</strong></div>
+        <div class="kv"><span>Last ingest</span><strong>{{ stats.latest or 'N/A' }}</strong></div>
+      </div>
+      <div class="card"><h3 style="margin:0 0 6px">Top suppliers</h3>
+        {% for row in stats.senders %}{% if row['sender'] %}
+        <div class="kv"><a href="/tools/email-filing?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ row['sender'] }}</a><span>{{ row['c'] }}</span></div>
+        {% endif %}{% endfor %}
+      </div>
+    </aside>
+  </div>
+</main></div></body></html>
