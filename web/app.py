@@ -10,7 +10,7 @@ import sqlite3
 import mimetypes
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request
@@ -145,7 +145,23 @@ def _launchctl_process_info(slug: str) -> dict:
     return info
 
 
-def _last_run_time(slug: str) -> str:
+def _format_ago(ts: float) -> str:
+    now = datetime.now().timestamp()
+    diff = max(0, int(now - ts))
+
+    if diff < 60:
+        return "just now"
+    if diff < 3600:
+        mins = diff // 60
+        return f"{mins}m ago"
+    if diff < 86400:
+        hrs = diff // 3600
+        return f"{hrs}h ago"
+    days = diff // 86400
+    return f"{days}d ago"
+
+
+def _last_run_time(slug: str) -> tuple[str, str]:
     out_log = AUTOMATION_BASE / "logs" / f"{slug}.out.log"
     err_log = AUTOMATION_BASE / "logs" / f"{slug}.err.log"
 
@@ -158,9 +174,12 @@ def _last_run_time(slug: str) -> str:
                 pass
 
     if not candidates:
-        return "Never"
+        return "Never", "never"
 
-    return datetime.fromtimestamp(max(candidates)).strftime("%Y-%m-%d %H:%M")
+    ts = max(candidates)
+    exact = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+    ago = _format_ago(ts)
+    return exact, ago
 
 
 def list_processes() -> list[dict]:
@@ -179,7 +198,9 @@ def list_processes() -> list[dict]:
         extra = _launchctl_process_info(slug) if slug else {"last_exit_code": None, "last_result": "Unknown"}
         item["last_exit_code"] = extra["last_exit_code"]
         item["last_result"] = extra["last_result"]
-        item["last_ran_at"] = _last_run_time(slug) if slug else "Never"
+        exact, ago = _last_run_time(slug) if slug else ("Never", "never")
+        item["last_ran_at"] = exact
+        item["last_ran_ago"] = ago
 
     return items
 

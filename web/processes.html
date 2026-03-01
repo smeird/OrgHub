@@ -52,7 +52,7 @@
             <td>{{ p.slug }}</td>
             <td>{{ p.schedule_seconds }}</td>
             <td class="state">{{ p.state }}</td>
-            <td>{{ p.last_ran_at }}</td>
+            <td>{{ p.last_ran_at }} <span style="color:#64748b;">({{ p.last_ran_ago }})</span></td>
             <td>{{ p.last_result }}</td>
             <td>
               <a class="btn" href="/tools/processes/enable?name={{ p.name }}">Enable</a>
