@@ -10,6 +10,7 @@ import sqlite3
 import mimetypes
 import subprocess
 from pathlib import Path
+from datetime import datetime
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request
@@ -125,6 +126,43 @@ def search(conn, query_embedding, limit=10, category: Optional[str] = None, send
     return results[:limit]
 
 
+def _launchctl_process_info(slug: str) -> dict:
+    label = f"gui/501/com.dom.process.{slug}"
+    res = subprocess.run(["launchctl", "print", label], capture_output=True, text=True)
+    text = (res.stdout or "") + (res.stderr or "")
+
+    info = {"last_exit_code": None, "last_result": "Unknown"}
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("last exit code ="):
+            try:
+                code = int(line.split("=", 1)[1].strip())
+                info["last_exit_code"] = code
+                info["last_result"] = "Success" if code == 0 else f"Failed ({code})"
+            except Exception:
+                pass
+            break
+    return info
+
+
+def _last_run_time(slug: str) -> str:
+    out_log = AUTOMATION_BASE / "logs" / f"{slug}.out.log"
+    err_log = AUTOMATION_BASE / "logs" / f"{slug}.err.log"
+
+    candidates = []
+    for p in (out_log, err_log):
+        if p.exists():
+            try:
+                candidates.append(p.stat().st_mtime)
+            except Exception:
+                pass
+
+    if not candidates:
+        return "Never"
+
+    return datetime.fromtimestamp(max(candidates)).strftime("%Y-%m-%d %H:%M")
+
+
 def list_processes() -> list[dict]:
     if not PROCESS_MGR.exists():
         return []
@@ -132,9 +170,18 @@ def list_processes() -> list[dict]:
     if res.returncode != 0:
         return []
     try:
-        return json.loads(res.stdout or "[]")
+        items = json.loads(res.stdout or "[]")
     except Exception:
         return []
+
+    for item in items:
+        slug = item.get("slug", "")
+        extra = _launchctl_process_info(slug) if slug else {"last_exit_code": None, "last_result": "Unknown"}
+        item["last_exit_code"] = extra["last_exit_code"]
+        item["last_result"] = extra["last_result"]
+        item["last_ran_at"] = _last_run_time(slug) if slug else "Never"
+
+    return items
 
 
 @app.get("/", response_class=HTMLResponse)

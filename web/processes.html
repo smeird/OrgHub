@@ -43,7 +43,7 @@
       <h3>Configured processes</h3>
       <table>
         <thead>
-          <tr><th>Name</th><th>Slug</th><th>Interval (s)</th><th>State</th><th>Actions</th></tr>
+          <tr><th>Name</th><th>Slug</th><th>Interval (s)</th><th>State</th><th>Last Run</th><th>Last Result</th><th>Actions</th></tr>
         </thead>
         <tbody>
         {% for p in items %}
@@ -52,13 +52,15 @@
             <td>{{ p.slug }}</td>
             <td>{{ p.schedule_seconds }}</td>
             <td class="state">{{ p.state }}</td>
+            <td>{{ p.last_ran_at }}</td>
+            <td>{{ p.last_result }}</td>
             <td>
               <a class="btn" href="/tools/processes/enable?name={{ p.name }}">Enable</a>
               <a class="btn" href="/tools/processes/disable?name={{ p.name }}" style="background:#334155;">Disable</a>
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="5">No processes yet.</td></tr>
+          <tr><td colspan="7">No processes yet.</td></tr>
         {% endfor %}
         </tbody>
       </table>
