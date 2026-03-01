@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Notes · Dom Organiser Hub</title>
+  <style>
+    body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; margin:0; background:#f3f6fb; color:#0f172a; }
+    .shell { max-width:1100px; margin:0 auto; padding:2rem 1.2rem 3rem; }
+    nav { display:flex; gap:0.6rem; margin-bottom:1rem; }
+    nav a { text-decoration:none; padding:0.5rem 0.9rem; border-radius:999px; background:#e2e8f0; color:#0f172a; font-weight:600; }
+    nav a.active { background:#0f172a; color:#fff; }
+    .card { background:#fff; border:1px solid #dbe3f4; border-radius:14px; padding:1rem; margin:0.8rem 0; }
+    input { width:100%; padding:0.55rem 0.7rem; border-radius:10px; border:1px solid #cbd5e1; }
+    table { width:100%; border-collapse:collapse; }
+    td,th { text-align:left; border-bottom:1px solid #e2e8f0; padding:0.6rem 0.4rem; font-size:0.9rem; vertical-align:top; }
+    .btn { text-decoration:none; padding:0.45rem 0.7rem; border-radius:999px; background:#0f172a; color:#fff; font-size:0.85rem; display:inline-block; }
+    .muted { color:#64748b; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav>
+      <a href="/">Hub</a>
+      <a href="/tools/email-filing">Email Filing</a>
+      <a href="/tools/processes">Processes</a>
+      <a href="/tools/calendar">Calendar</a>
+      <a href="/tools/notes" class="active">Notes</a>
+    </nav>
+
+    <h1>Notes</h1>
+    <p>Connected vault: <strong>{{ vault_name }}</strong></p>
+    <p class="muted" style="margin-top:-0.4rem;">{{ vault_path }}</p>
+    {% if msg %}<p><strong>{{ msg }}</strong></p>{% endif %}
+
+    <section class="card">
+      <form method="get" action="/tools/notes" style="display:flex;gap:0.6rem;align-items:center;">
+        <input name="q" value="{{ query }}" placeholder="Search note title or content" />
+        <button class="btn" type="submit">Search</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h3>Recent / Matching notes</h3>
+      <table>
+        <thead><tr><th>Title</th><th>Path</th><th>Modified</th><th>Size</th><th>Open</th></tr></thead>
+        <tbody>
+          {% for n in notes %}
+          <tr>
+            <td>{{ n.title }}</td>
+            <td class="muted">{{ n.path }}</td>
+            <td>{{ n.modified }}</td>
+            <td>{{ n.size_kb }} KB</td>
+            <td><a class="btn" href="{{ n.url }}">Open in Obsidian</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5">No notes found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+</body>
+</html>

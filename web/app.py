@@ -11,6 +11,7 @@ import mimetypes
 import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request
@@ -25,6 +26,7 @@ DB_PATH = BASE_DIR / "attachments.db"
 AUTOMATION_BASE = Path.home() / "AutomationHub"
 PROCESS_MGR = AUTOMATION_BASE / "bin" / "process_manager.py"
 CALENDAR_NAME = "BundyFamily"
+OBSIDIAN_CONFIG_PATH = Path.home() / "Library/Application Support/obsidian/obsidian.json"
 
 load_dotenv(BASE_DIR / ".env")
 
@@ -57,6 +59,73 @@ def run_osascript(script: str, args: list[str] | None = None) -> subprocess.Comp
     if args:
         cmd.extend(args)
     return subprocess.run(cmd, input=script, text=True, capture_output=True)
+
+
+def resolve_obsidian_vault() -> tuple[str, Path] | tuple[None, None]:
+    if not OBSIDIAN_CONFIG_PATH.exists():
+        return None, None
+
+    try:
+        cfg = json.loads(OBSIDIAN_CONFIG_PATH.read_text())
+    except Exception:
+        return None, None
+
+    vaults = cfg.get("vaults", {})
+    if not isinstance(vaults, dict) or not vaults:
+        return None, None
+
+    chosen = None
+    for v in vaults.values():
+        if isinstance(v, dict) and v.get("open"):
+            chosen = v
+            break
+    if not chosen:
+        chosen = next(iter(vaults.values()))
+
+    vault_path = Path(chosen.get("path", "")).expanduser()
+    if not vault_path.exists():
+        return None, None
+
+    vault_name = vault_path.name
+    return vault_name, vault_path
+
+
+def list_obsidian_notes(vault_name: str, vault_path: Path, query: str = "", limit: int = 200) -> list[dict]:
+    q = (query or "").strip().lower()
+    notes = []
+
+    for md in vault_path.rglob("*.md"):
+        if ".obsidian" in md.parts:
+            continue
+
+        rel = md.relative_to(vault_path).as_posix()
+        rel_l = rel.lower()
+
+        include = True
+        if q:
+            include = q in rel_l
+            if not include:
+                try:
+                    content = md.read_text(errors="ignore")
+                    include = q in content.lower()
+                except Exception:
+                    include = False
+
+        if not include:
+            continue
+
+        st = md.stat()
+        url = f"obsidian://open?vault={quote(vault_name)}&file={quote(rel)}"
+        notes.append({
+            "title": md.stem,
+            "path": rel,
+            "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
+            "size_kb": round(st.st_size / 1024, 1),
+            "url": url,
+        })
+
+    notes.sort(key=lambda n: n["modified"], reverse=True)
+    return notes[:limit]
 
 
 def calendar_window_days(window: str) -> int:
@@ -392,6 +461,7 @@ async def hub(request: Request):
         {"name": "Email Filing", "status": "Live", "desc": "Search and triage email attachments.", "href": "/tools/email-filing"},
         {"name": "Processes", "status": "Live", "desc": f"Manage automations ({process_count} configured).", "href": "/tools/processes"},
         {"name": "Calendar", "status": "Live", "desc": "BundyFamily calendar (RW) with 1-hour reminders.", "href": "/tools/calendar"},
+        {"name": "Notes", "status": "Live", "desc": "Browse and search Obsidian notes.", "href": "/tools/notes"},
         {"name": "Tasks", "status": "Planned", "desc": "Upcoming task workflows.", "href": "#"},
     ]
     runtime_path = str(BASE_DIR)
@@ -478,6 +548,27 @@ async def calendar_from_attachment(attachment_id: int):
     }
     from urllib.parse import urlencode
     return RedirectResponse(url=f"/tools/calendar?{urlencode(params)}", status_code=302)
+
+
+@app.get("/tools/notes", response_class=HTMLResponse)
+async def notes_view(request: Request, q: str = "", msg: str = ""):
+    vault_name, vault_path = resolve_obsidian_vault()
+    notes = []
+    if vault_name and vault_path:
+        notes = list_obsidian_notes(vault_name, vault_path, query=q, limit=300)
+
+    return templates.TemplateResponse(
+        "notes.html",
+        {
+            "request": request,
+            "active_nav": "notes",
+            "msg": msg,
+            "query": q,
+            "vault_name": vault_name or "Not configured",
+            "vault_path": str(vault_path) if vault_path else "Obsidian vault not found",
+            "notes": notes,
+        },
+    )
 
 
 @app.get("/tools/processes", response_class=HTMLResponse)
