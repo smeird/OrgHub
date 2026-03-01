@@ -2,66 +2,64 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dom Organiser Hub</title>
   <style>
-    :root { --bg:#f3f6fb; --panel:#0f172a; --card:#fff; --line:#dbe3f4; --muted:#64748b; --text:#0f172a; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; background:var(--bg); color:var(--text); }
-    .layout { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
-    .sidebar { background:var(--panel); color:#fff; padding:0.75rem; }
-    .brand { font-weight:800; margin:0.3rem 0 1rem; }
-    .nav a { display:block; color:#cbd5e1; text-decoration:none; padding:0.45rem 0.55rem; border-radius:10px; margin-bottom:0.2rem; font-weight:600; }
-    .nav a.active,.nav a:hover { background:#1e293b; color:#fff; }
-    .main { padding:0.9rem 1.1rem 1.2rem; width:100%; }
-    h1 { margin:0; font-size:2rem; }
-    .muted { color:var(--muted); }
-    .stats { display:grid; grid-template-columns:repeat(4,minmax(180px,1fr)); gap:0.5rem; margin-top:1rem; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:0.75rem; }
-    .label { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; }
-    .value { font-size:1.1rem; font-weight:700; margin-top:0.2rem; }
-    .modules { margin-top:1rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:0.4rem; }
-    .status { display:inline-block; font-size:0.72rem; padding:0.2rem 0.55rem; border-radius:999px; background:#e2e8f0; }
-    .status.live { background:#dcfce7; color:#166534; }
-    .btn { margin-top:auto; text-decoration:none; background:linear-gradient(135deg,#2563eb,#7c3aed); color:#fff; padding:0.55rem 0.8rem; border-radius:999px; text-align:center; font-weight:600; display:inline-block; }
-   .dense-note{font-size:0.76rem;color:#6b7280} .card h3{margin:0 0 0.45rem} </style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+    :root{--bg1:#eff3fa;--bg2:#dbe8fb;--panel:#0b1220;--panel2:#111a2b;--card:#ffffffd9;--line:#cfdaef;--text:#0f172a;--muted:#5f6f86;--accent:#2f6df6;--radius:12px;--pad:14px;--font:'IBM Plex Sans',system-ui,sans-serif}
+    body.dense{--pad:10px;--radius:10px}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;font-family:var(--font);color:var(--text);background:linear-gradient(135deg,var(--bg1),var(--bg2)) fixed}
+    .layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+    .sidebar{position:sticky;top:0;height:100vh;background:linear-gradient(180deg,var(--panel),var(--panel2));padding:12px;color:#dbe7ff;border-right:1px solid #22314d}
+    .brand{font-weight:700;letter-spacing:.2px;margin:6px 0 12px}
+    .nav a{display:block;color:#bfd0f0;text-decoration:none;padding:8px 10px;border-radius:10px;margin-bottom:4px;font-weight:600}
+    .nav a.active,.nav a:hover{background:#1f2d46;color:#fff}
+    .tog{margin-top:10px;width:100%;padding:8px;border-radius:10px;border:1px solid #2f4264;background:#16243a;color:#d9e7ff;cursor:pointer}
+    .main{padding:12px 14px 18px}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px;margin-top:10px}
+    .card{background:var(--card);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad)}
+    .label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace}
+    .value{font-size:1.12rem;font-weight:700;margin-top:3px}
+    .modules{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+    .status{font-size:.72rem;padding:2px 8px;border-radius:999px;background:#e6eefc}.live{background:#dff7e7;color:#166534}
+    .btn{margin-top:auto;display:inline-block;text-decoration:none;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;padding:8px 10px;border-radius:999px;font-weight:600}
+  </style>
 </head>
 <body>
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="brand">Dom Organiser Hub</div>
-      <nav class="nav">
-        <a href="/" class="active">Hub</a>
-        <a href="/tools/email-filing">Email Filing</a>
-        <a href="/tools/processes">Processes</a>
-        <a href="/tools/calendar">Calendar</a>
-        <a href="/tools/notes">Notes</a>
-      </nav>
-    </aside>
-
-    <main class="main">
-      <h1>Overview</h1>
-      {% if path_status %}
-      <div style="margin:0.8rem 0 0.2rem;padding:0.55rem 0.75rem;border:1px solid #bbf7d0;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:600;display:inline-block;">{{ path_status }}</div>
-      {% endif %}
-      <p class="muted">Base site for your tools, now in a sidebar layout.</p>
-
-      <div class="stats">
-        <div class="card"><div class="label">Attachments</div><div class="value">{{ stats.attachments }}</div></div>
-        <div class="card"><div class="label">Text Chunks</div><div class="value">{{ stats.chunks }}</div></div>
-        <div class="card"><div class="label">Storage</div><div class="value">{{ (stats.storage / (1024*1024)) | round(1) }} MB</div></div>
-        <div class="card"><div class="label">Last Ingest</div><div class="value" style="font-size:1rem">{{ stats.latest or 'N/A' }}</div></div>
-      </div>
-
-      <div class="modules">
-        {% for m in modules %}
-        <article class="card" style="display:flex;flex-direction:column;gap:0.4rem;">
-          <div><strong>{{ m.name }}</strong> <span class="status {% if m.status == 'Live' %}live{% endif %}">{{ m.status }}</span></div>
-          <div class="muted">{{ m.desc }}</div>
-          {% if m.href != '#' %}<a class="btn" href="{{ m.href }}">Open module</a>{% else %}<span class="btn" style="opacity:.45; pointer-events:none;">Coming soon</span>{% endif %}
-        </article>
-        {% endfor %}
-      </div>
-    </main>
-  </div>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">Dom Organiser Hub</div>
+    <nav class="nav">
+      <a href="/" class="active">Hub</a><a href="/tools/email-filing">Email Filing</a><a href="/tools/processes">Processes</a><a href="/tools/calendar">Calendar</a><a href="/tools/notes">Notes</a>
+    </nav>
+    <button class="tog" onclick="toggleDense()">Toggle density</button>
+  </aside>
+  <main class="main">
+    <div class="toolbar"><h1 style="margin:0">Overview</h1><span class="muted">Scientific UI theme</span></div>
+    {% if path_status %}<div class="card" style="margin-top:8px;color:#166534;border-color:#b8eac6;background:#edfff2">{{ path_status }}</div>{% endif %}
+    <div class="grid">
+      <div class="card"><div class="label">Attachments</div><div class="value">{{ stats.attachments }}</div></div>
+      <div class="card"><div class="label">Text Chunks</div><div class="value">{{ stats.chunks }}</div></div>
+      <div class="card"><div class="label">Storage</div><div class="value">{{ (stats.storage / (1024*1024)) | round(1) }} MB</div></div>
+      <div class="card"><div class="label">Last Ingest</div><div class="value" style="font-size:.95rem">{{ stats.latest or 'N/A' }}</div></div>
+    </div>
+    <div class="modules">
+      {% for m in modules %}
+      <article class="card" style="display:flex;flex-direction:column;gap:8px">
+        <div><strong>{{ m.name }}</strong> <span class="status {% if m.status == 'Live' %}live{% endif %}">{{ m.status }}</span></div>
+        <div class="muted">{{ m.desc }}</div>
+        {% if m.href != '#' %}<a class="btn" href="{{ m.href }}">Open module</a>{% else %}<span class="btn" style="opacity:.5;pointer-events:none">Coming soon</span>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+<script>
+(function(){if(localStorage.getItem('denseMode')==='1')document.body.classList.add('dense')})();
+function toggleDense(){document.body.classList.toggle('dense');localStorage.setItem('denseMode',document.body.classList.contains('dense')?'1':'0');}
+</script>
 </body>
 </html>
