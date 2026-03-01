@@ -1,0 +1,22 @@
+# Secrets
+.env
+*.pem
+*.key
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime/data
+attachments.db
+attachments.db-shm
+attachments.db-wal
+logs/
+raw/
+processed/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

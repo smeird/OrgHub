@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Email Filing · Dom Organiser Hub</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f6fb;
+      --card: #ffffff;
+      --border: #dde3f3;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; margin:0; background:var(--bg); color:var(--text); }
+    .shell { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+    header.hero { margin-bottom: 2rem; }
+    header.hero h1 { margin:0; font-size:2.1rem; font-weight:700; letter-spacing:-0.01em; }
+    header.hero p { color: var(--muted); margin:0.4rem 0 0; }
+    .stat-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:0.8rem; margin-top:1.5rem; }
+    .stat-card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:1rem; }
+    .stat-label { font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; }
+    .stat-value { font-size:1.5rem; font-weight:600; margin-top:0.3rem; }
+    form.search { display:flex; gap:0.6rem; margin-top:1rem; }
+    form.search input { flex:1; padding:0.85rem 1rem; border-radius:999px; border:1px solid var(--border); font-size:1rem; }
+    form.search button { padding:0.85rem 1.4rem; border-radius:999px; border:none; background:linear-gradient(135deg,#2563eb,#7c3aed); color:white; font-weight:600; cursor:pointer; }
+    .filters { display:flex; flex-wrap:wrap; gap:0.5rem; margin:1.5rem 0 0.8rem; }
+    .chip { padding:0.35rem 0.9rem; border-radius:999px; border:1px solid var(--border); font-size:0.85rem; text-decoration:none; color:var(--muted); }
+    .chip.active { background:var(--text); color:white; border:none; }
+    .sections { display:grid; grid-template-columns: minmax(0,2fr) minmax(280px,1fr); gap:1.5rem; margin-top:1rem; }
+    .results { margin-top:0.5rem; display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:0.9rem; }
+    .result { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; box-shadow: 0 10px 24px rgba(15,23,42,0.06); position: relative; }
+    .badge { align-self:flex-start; padding:0.2rem 0.7rem; border-radius:999px; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; background:#e0e7ff; color:#3730a3; }
+    .tag-row { display:flex; flex-wrap:wrap; gap:0.3rem; }
+    .tag { padding:0.15rem 0.5rem; border-radius:6px; background:#e2e8f0; font-size:0.7rem; color:#0f172a; }
+    .score { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .result h2 { margin: 0; font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .meta-block { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.7rem; color: var(--muted); }
+    .snippet { font-size: 0.8rem; color: #1e293b; flex: 1; max-height: 3.6em; overflow: hidden; }
+    .actions { display: flex; gap: 0.4rem; margin-top: auto; }
+    .pill { flex: 1; text-align: center; padding: 0.35rem; border-radius: 999px; font-weight: 600; font-size: 0.75rem; text-decoration: none; border: 1px solid var(--border); }
+    .pill.primary { background: linear-gradient(135deg,#2563eb,#7c3aed); color: white; border: none; }
+    .pill.secondary { color: var(--accent); }
+    .side-card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:1rem 1.2rem; }
+    .bucket-list, .sender-list { display:flex; flex-direction:column; gap:0.4rem; margin-top:0.8rem; }
+    .bucket-row, .sender-row { display:flex; justify-content:space-between; font-size:0.85rem; }
+    .bucket-row a, .sender-row a { text-decoration:none; color:var(--text); font-weight:600; }
+    .empty { color: var(--muted); margin-top:1rem; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <h1>Email filing</h1>
+      <p><a href="/" style="text-decoration:none;color:#2563eb;font-weight:600;">← Back to Organiser Hub</a></p>
+      <p>{{ stats.attachments }} attachments archived · {{ stats.chunks }} text chunks · Last ingest {{ stats.latest or 'N/A' }}</p>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Storage used</div>
+          <div class="stat-value">{{ (stats.storage / (1024*1024)) | round(1) }} MB</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Unique senders</div>
+          <div class="stat-value">{{ stats.senders|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Categories</div>
+          <div class="stat-value">{{ stats.categories|length }}</div>
+        </div>
+      </div>
+      <form class="search" method="get">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search attachments" />
+        <input type="hidden" name="category" value="{{ category }}" />
+        <input type="hidden" name="sender" value="{{ sender }}" />
+        <input type="hidden" name="tag" value="{{ tag }}" />
+        <button type="submit">Search</button>
+      </form>
+      <div class="filters">
+        <a class="chip{% if not category %} active{% endif %}" href="/?q={{ query }}&sender={{ sender }}&tag={{ tag }}">All categories</a>
+        {% for row in stats.categories %}
+          {% set cat = row['category'] or 'Unsorted' %}
+          <a class="chip{% if category == cat %} active{% endif %}" href="/?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }} ({{ row['c'] }})</a>
+        {% endfor %}
+      </div>
+    </header>
+
+    <div class="sections">
+      <section>
+        <div class="filters">
+          <a class="chip{% if not sender %} active{% endif %}" href="/?q={{ query }}&category={{ category }}&tag={{ tag }}">All senders</a>
+          {% for row in stats.senders %}
+            {% if row['sender'] %}
+            <a class="chip{% if sender == row['sender'] %} active{% endif %}" href="/?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ row['sender'] }} ({{ row['c'] }})</a>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="results">
+          {% if results %}
+            {% for result in results %}
+              <article class="result">
+                <div class="badge">{{ result.category or 'Unsorted' }}</div>
+                <div class="score">{{ '{:.3f}'.format(result.score) }}</div>
+                <h2>{{ result.message_subject or '(no subject)' }}</h2>
+                <div class="meta-block">
+                  <span>{{ result.message_date }}</span>
+                  <span>{{ result.message_sender }}</span>
+                </div>
+                <p class="snippet">{{ result.snippet }}</p>
+                {% if result.tags %}
+                <div class="tag-row">
+                  {% for tag in result.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+                </div>
+                {% endif %}
+                <div class="actions">
+                  <a class="pill primary" href="/attachment/{{ result.attachment_id }}">View text</a>
+                  <a class="pill secondary" href="/preview/{{ result.attachment_id }}" target="_blank">Open original</a>
+                </div>
+              </article>
+            {% endfor %}
+          {% elif query %}
+            <p class="empty">No results for “{{ query }}”. Try a different term or remove filters.</p>
+          {% else %}
+            <p class="empty">Enter a search above to browse attachments.</p>
+          {% endif %}
+        </div>
+      </section>
+      <aside>
+        <div class="side-card">
+          <h3>Filing buckets</h3>
+          <div class="bucket-list">
+            {% for row in stats.categories %}
+              {% set cat = row['category'] or 'Unsorted' %}
+              <div class="bucket-row">
+                <a href="/?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }}</a>
+                <span>{{ row['c'] }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="side-card" style="margin-top:1rem;">
+          <h3>Top senders</h3>
+          <div class="sender-list">
+            {% for row in stats.senders %}
+              {% if row['sender'] %}
+              <div class="sender-row">
+                <a href="/?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ row['sender'] }}</a>
+                <span>{{ row['c'] }}</span>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      <div class="side-card" style="margin-top:1rem;">
+          <h3>Tags</h3>
+          <div class="bucket-list">
+            <div class="bucket-row">
+              <a href="/?q={{ query }}&category={{ category }}&sender={{ sender }}">All tags</a>
+            </div>
+            {% for row in stats.tags %}
+              <div class="bucket-row">
+                <a href="/?q={{ query }}&category={{ category }}&sender={{ sender }}&tag={{ row['tag'] }}">{{ row['tag'] }}</a>
+                <span>{{ row['c'] }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

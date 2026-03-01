@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dom Organiser Hub</title>
+  <style>
+    body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; margin:0; background:#f3f6fb; color:#0f172a; }
+    .shell { max-width:1100px; margin:0 auto; padding:2rem 1.2rem 3rem; }
+    nav { display:flex; gap:0.6rem; margin-bottom:1rem; }
+    nav a { text-decoration:none; padding:0.5rem 0.9rem; border-radius:999px; background:#e2e8f0; color:#0f172a; font-weight:600; }
+    nav a.active { background:#0f172a; color:#fff; }
+    h1 { margin:0; font-size:2rem; }
+    .muted { color:#64748b; margin-top:0.4rem; }
+    .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:0.8rem; margin-top:1.2rem; }
+    .card { background:#fff; border:1px solid #dbe3f4; border-radius:16px; padding:1rem; }
+    .label { font-size:0.75rem; color:#64748b; text-transform:uppercase; letter-spacing:0.08em; }
+    .value { font-size:1.4rem; font-weight:700; margin-top:0.3rem; }
+    .modules { margin-top:1.4rem; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:0.9rem; }
+    .module { background:#fff; border:1px solid #dbe3f4; border-radius:16px; padding:1rem; display:flex; flex-direction:column; gap:0.6rem; }
+    .status { display:inline-block; font-size:0.72rem; padding:0.2rem 0.55rem; border-radius:999px; background:#e2e8f0; }
+    .status.live { background:#dcfce7; color:#166534; }
+    .btn { margin-top:auto; text-decoration:none; background:linear-gradient(135deg,#2563eb,#7c3aed); color:#fff; padding:0.55rem 0.8rem; border-radius:999px; text-align:center; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav>
+      <a href="/" class="active">Hub</a>
+      <a href="/tools/email-filing">Email Filing</a>
+      <a href="/tools/processes">Processes</a>
+    </nav>
+
+    <h1>Dom Organiser Hub</h1>
+    <p class="muted">Base site for your tools. Email Filing is now one module inside this larger dashboard.</p>
+
+    <div class="stats">
+      <div class="card"><div class="label">Attachments</div><div class="value">{{ stats.attachments }}</div></div>
+      <div class="card"><div class="label">Text Chunks</div><div class="value">{{ stats.chunks }}</div></div>
+      <div class="card"><div class="label">Storage</div><div class="value">{{ (stats.storage / (1024*1024)) | round(1) }} MB</div></div>
+      <div class="card"><div class="label">Last Ingest</div><div class="value" style="font-size:1rem">{{ stats.latest or 'N/A' }}</div></div>
+    </div>
+
+    <div class="modules">
+      {% for m in modules %}
+      <article class="module">
+        <div>
+          <strong>{{ m.name }}</strong>
+          <span class="status {% if m.status == 'Live' %}live{% endif %}">{{ m.status }}</span>
+        </div>
+        <div class="muted">{{ m.desc }}</div>
+        {% if m.href != '#' %}
+          <a class="btn" href="{{ m.href }}">Open module</a>
+        {% else %}
+          <span class="btn" style="opacity:.45; pointer-events:none;">Coming soon</span>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</body>
+</html>

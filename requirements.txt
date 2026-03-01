@@ -1,0 +1,6 @@
+dotenv
+python-dotenv
+imap-tools
+openai
+pytz
+tiktoken

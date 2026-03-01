@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Processes · Dom Organiser Hub</title>
+  <style>
+    body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; margin:0; background:#f3f6fb; color:#0f172a; }
+    .shell { max-width:1100px; margin:0 auto; padding:2rem 1.2rem 3rem; }
+    nav { display:flex; gap:0.6rem; margin-bottom:1rem; }
+    nav a { text-decoration:none; padding:0.5rem 0.9rem; border-radius:999px; background:#e2e8f0; color:#0f172a; font-weight:600; }
+    nav a.active { background:#0f172a; color:#fff; }
+    .card { background:#fff; border:1px solid #dbe3f4; border-radius:14px; padding:1rem; margin:0.8rem 0; }
+    input { padding:0.55rem 0.7rem; border-radius:10px; border:1px solid #cbd5e1; }
+    .btn { text-decoration:none; padding:0.45rem 0.7rem; border-radius:999px; background:#0f172a; color:#fff; font-size:0.85rem; }
+    table { width:100%; border-collapse:collapse; }
+    td,th { text-align:left; border-bottom:1px solid #e2e8f0; padding:0.6rem 0.4rem; font-size:0.9rem; }
+    .state { font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav>
+      <a href="/">Hub</a>
+      <a href="/tools/email-filing">Email Filing</a>
+      <a href="/tools/processes" class="active">Processes</a>
+    </nav>
+
+    <h1>Processes</h1>
+    <p>Create and manage reusable automations. Each process is boot-managed with launchd.</p>
+    {% if msg %}<p><strong>{{ msg }}</strong></p>{% endif %}
+
+    <section class="card">
+      <h3>Create process</h3>
+      <form method="get" action="/tools/processes/create" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
+        <input name="name" placeholder="Process name (e.g. Milkman Watcher)" required />
+        <input name="interval" type="number" value="300" min="30" step="30" />
+        <input name="description" placeholder="Short description" style="min-width:280px;" />
+        <button class="btn" type="submit">Create + Enable</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h3>Configured processes</h3>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Slug</th><th>Interval (s)</th><th>State</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+        {% for p in items %}
+          <tr>
+            <td>{{ p.name }}</td>
+            <td>{{ p.slug }}</td>
+            <td>{{ p.schedule_seconds }}</td>
+            <td class="state">{{ p.state }}</td>
+            <td>
+              <a class="btn" href="/tools/processes/enable?name={{ p.name }}">Enable</a>
+              <a class="btn" href="/tools/processes/disable?name={{ p.name }}" style="background:#334155;">Disable</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5">No processes yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+</body>
+</html>
