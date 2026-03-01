@@ -23,18 +23,18 @@ It ingests attachments from iCloud Mail, extracts text from common file types, c
 ```mermaid
 flowchart TD
     A[iCloud Mail / IMAP Inbox] --> B[fetch_process.py]
-    B --> C[attachments.db (SQLite)]
+    B --> C[attachments.db SQLite]
     B --> D[raw/ attachments]
     B --> E[processed/ extracted text]
 
     D --> F[extract_text.py]
     F --> E
 
-    E --> G[vectorize.py\nchunk + embedding]
+    E --> G[vectorize.py<br>chunk + embedding]
     G --> C
 
-    C --> H[web/app.py (FastAPI)]
-    H --> I[Web UI pages\nHub + Email Filing + Processes]
+    C --> H[web/app.py FastAPI]
+    H --> I[Web UI pages<br>Hub + Email Filing + Processes]
     I --> J[User search/filter/preview]
 
     H --> K[AutomationHub process_manager.py]
