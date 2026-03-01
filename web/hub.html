@@ -32,6 +32,11 @@
     </nav>
 
     <h1>Dom Organiser Hub</h1>
+    {% if path_status %}
+    <div style="margin:0.8rem 0 0.2rem;padding:0.55rem 0.75rem;border:1px solid #bbf7d0;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:600;display:inline-block;">
+      {{ path_status }}
+    </div>
+    {% endif %}
     <p class="muted">Base site for your tools. Email Filing is now one module inside this larger dashboard.</p>
 
     <div class="stats">

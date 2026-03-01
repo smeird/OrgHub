@@ -394,7 +394,10 @@ async def hub(request: Request):
         {"name": "Calendar", "status": "Live", "desc": "BundyFamily calendar (RW) with 1-hour reminders.", "href": "/tools/calendar"},
         {"name": "Tasks", "status": "Planned", "desc": "Upcoming task workflows.", "href": "#"},
     ]
-    return templates.TemplateResponse("hub.html", {"request": request, "stats": stats, "modules": modules, "active_nav": "hub"})
+    runtime_path = str(BASE_DIR)
+    canonical_path = str(Path.home() / "AutomationHub" / "email-filing")
+    path_status = "Running from canonical path" if runtime_path == canonical_path else f"Running from non-canonical path: {runtime_path}"
+    return templates.TemplateResponse("hub.html", {"request": request, "stats": stats, "modules": modules, "active_nav": "hub", "path_status": path_status, "runtime_path": runtime_path})
 
 
 @app.get("/tools/calendar", response_class=HTMLResponse)
