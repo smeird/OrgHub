@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Organization Hub + modules (Email Filing + Processes)."""
+"""Organization Hub + modules (Email Filing + Processes + Calendar)."""
 
 from __future__ import annotations
 from typing import Optional
@@ -20,10 +20,11 @@ from starlette.templating import Jinja2Templates
 
 from vectorize import embed_texts
 
-BASE_DIR = Path.home() / "Documents" / "Email-Attachments"
+BASE_DIR = Path(os.getenv("EMAIL_ATTACHMENTS_BASE", str(Path.home() / "AutomationHub" / "email-filing")))
 DB_PATH = BASE_DIR / "attachments.db"
 AUTOMATION_BASE = Path.home() / "AutomationHub"
 PROCESS_MGR = AUTOMATION_BASE / "bin" / "process_manager.py"
+CALENDAR_NAME = "BundyFamily"
 
 load_dotenv(BASE_DIR / ".env")
 
@@ -49,6 +50,183 @@ def connect_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def run_osascript(script: str, args: list[str] | None = None) -> subprocess.CompletedProcess:
+    cmd = ["osascript", "-"]
+    if args:
+        cmd.extend(args)
+    return subprocess.run(cmd, input=script, text=True, capture_output=True)
+
+
+def calendar_window_days(window: str) -> int:
+    return {"today": 1, "week": 7, "14d": 14}.get(window, 14)
+
+
+def list_calendar_events(limit: int = 30, window: str = "14d") -> list[dict]:
+    days = calendar_window_days(window)
+    script = r'''
+on run argv
+  set calName to item 1 of argv
+  set maxCount to (item 2 of argv) as integer
+  set dayCount to (item 3 of argv) as integer
+  tell application "Calendar"
+    if not (exists calendar calName) then
+      return "__NO_CALENDAR__"
+    end if
+    set fromDate to (current date)
+    set toDate to fromDate + (dayCount * days)
+    set evs to (every event of calendar calName whose start date ≥ fromDate and start date ≤ toDate)
+    set sortedEvs to my sortEvents(evs)
+    set outLines to ""
+    set i to 0
+    repeat with ev in sortedEvs
+      set i to i + 1
+      if i > maxCount then exit repeat
+      set uidText to uid of ev
+      set t to summary of ev
+      set sd to (start date of ev) as string
+      set ed to (end date of ev) as string
+      set l to location of ev
+      if l is missing value then set l to ""
+      set d to description of ev
+      if d is missing value then set d to ""
+      set outLines to outLines & uidText & "\t" & t & "\t" & sd & "\t" & ed & "\t" & l & "\t" & d & "\n"
+    end repeat
+    return outLines
+  end tell
+end run
+
+on sortEvents(evs)
+  tell application "Calendar"
+    set sortedEvs to evs
+    set n to count of sortedEvs
+    repeat with i from 1 to n
+      repeat with j from i + 1 to n
+        if (start date of item j of sortedEvs) < (start date of item i of sortedEvs) then
+          set tmp to item i of sortedEvs
+          set item i of sortedEvs to item j of sortedEvs
+          set item j of sortedEvs to tmp
+        end if
+      end repeat
+    end repeat
+    return sortedEvs
+  end tell
+end sortEvents
+'''
+    res = run_osascript(script, [CALENDAR_NAME, str(limit), str(days)])
+    if res.returncode != 0:
+        return []
+    out = (res.stdout or "").strip()
+    if out == "__NO_CALENDAR__" or not out:
+        return []
+    events = []
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 5:
+            events.append(
+                {
+                    "uid": parts[0],
+                    "title": parts[1],
+                    "start": parts[2],
+                    "end": parts[3],
+                    "location": parts[4],
+                    "notes": parts[5] if len(parts) > 5 else "",
+                }
+            )
+    return events
+
+
+def create_or_update_calendar_event(title: str, start_iso: str, end_iso: str, notes: str = "", uid: str = "") -> tuple[bool, str]:
+    script = r'''
+on parseISO(isoText)
+  set oldTIDs to AppleScript's text item delimiters
+  set AppleScript's text item delimiters to {"-", "T", ":"}
+  set parts to text items of isoText
+  set AppleScript's text item delimiters to oldTIDs
+
+  set yy to item 1 of parts as integer
+  set mm to item 2 of parts as integer
+  set dd to item 3 of parts as integer
+  set hh to item 4 of parts as integer
+  set mi to item 5 of parts as integer
+
+  set d to current date
+  set year of d to yy
+  set month of d to mm
+  set day of d to dd
+  set hours of d to hh
+  set minutes of d to mi
+  set seconds of d to 0
+  return d
+end parseISO
+
+on run argv
+  set calName to item 1 of argv
+  set evTitle to item 2 of argv
+  set startISO to item 3 of argv
+  set endISO to item 4 of argv
+  set evNotes to item 5 of argv
+  set evUid to item 6 of argv
+
+  set sDate to my parseISO(startISO)
+  set eDate to my parseISO(endISO)
+
+  tell application "Calendar"
+    if not (exists calendar calName) then
+      return "ERR: Calendar not found"
+    end if
+
+    tell calendar calName
+      if evUid is not "" then
+        set matches to (every event whose uid is evUid)
+        if (count of matches) > 0 then
+          set tgt to item 1 of matches
+          set summary of tgt to evTitle
+          set start date of tgt to sDate
+          set end date of tgt to eDate
+          set description of tgt to evNotes
+          return "UPDATED"
+        end if
+      end if
+
+      set newEvent to make new event with properties {summary:evTitle, start date:sDate, end date:eDate, description:evNotes}
+      tell newEvent
+        make new display alarm at end with properties {trigger interval:-60}
+      end tell
+    end tell
+  end tell
+  return "CREATED"
+end run
+'''
+    res = run_osascript(script, [CALENDAR_NAME, title, start_iso, end_iso, notes, uid])
+    output = (res.stdout or "").strip() or (res.stderr or "").strip()
+    return (res.returncode == 0 and output in {"CREATED", "UPDATED"}, output)
+
+
+def delete_calendar_event(uid: str) -> tuple[bool, str]:
+    script = r'''
+on run argv
+  set calName to item 1 of argv
+  set evUid to item 2 of argv
+  tell application "Calendar"
+    if not (exists calendar calName) then
+      return "ERR: Calendar not found"
+    end if
+    tell calendar calName
+      set matches to (every event whose uid is evUid)
+      if (count of matches) = 0 then
+        return "NOT_FOUND"
+      end if
+      delete item 1 of matches
+      return "DELETED"
+    end tell
+  end tell
+end run
+'''
+    res = run_osascript(script, [CALENDAR_NAME, uid])
+    output = (res.stdout or "").strip() or (res.stderr or "").strip()
+    return (res.returncode == 0 and output == "DELETED", output)
 
 
 def cosine_similarity(vec_a, vec_b):
@@ -213,10 +391,90 @@ async def hub(request: Request):
     modules = [
         {"name": "Email Filing", "status": "Live", "desc": "Search and triage email attachments.", "href": "/tools/email-filing"},
         {"name": "Processes", "status": "Live", "desc": f"Manage automations ({process_count} configured).", "href": "/tools/processes"},
+        {"name": "Calendar", "status": "Live", "desc": "BundyFamily calendar (RW) with 1-hour reminders.", "href": "/tools/calendar"},
         {"name": "Tasks", "status": "Planned", "desc": "Upcoming task workflows.", "href": "#"},
-        {"name": "Calendar", "status": "Planned", "desc": "Upcoming schedule dashboard.", "href": "#"},
     ]
     return templates.TemplateResponse("hub.html", {"request": request, "stats": stats, "modules": modules, "active_nav": "hub"})
+
+
+@app.get("/tools/calendar", response_class=HTMLResponse)
+async def calendar_view(
+    request: Request,
+    msg: str = "",
+    window: str = "14d",
+    edit_uid: str = "",
+    title: str = "",
+    start: str = "",
+    end: str = "",
+    notes: str = "",
+):
+    events = list_calendar_events(limit=40, window=window)
+    edit_event = next((e for e in events if e["uid"] == edit_uid), None)
+
+    now_local = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    default_end = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M")
+
+    form_title = title or (edit_event["title"] if edit_event else "")
+    form_start = start or now_local
+    form_end = end or default_end
+    form_notes = notes or (edit_event["notes"] if edit_event else "")
+
+    return templates.TemplateResponse(
+        "calendar.html",
+        {
+            "request": request,
+            "events": events,
+            "calendar_name": CALENDAR_NAME,
+            "msg": msg,
+            "window": window,
+            "active_nav": "calendar",
+            "edit_uid": edit_uid,
+            "form_title": form_title,
+            "form_start": form_start,
+            "form_end": form_end,
+            "form_notes": form_notes,
+        },
+    )
+
+
+@app.get("/tools/calendar/save")
+async def calendar_save(title: str, start: str, end: str, notes: str = "", uid: str = ""):
+    ok, out = create_or_update_calendar_event(title, start, end, notes, uid)
+    if ok:
+        msg = "Event+updated" if out == "UPDATED" else "Event+created"
+        return RedirectResponse(url=f"/tools/calendar?msg={msg}", status_code=302)
+    return RedirectResponse(url=f"/tools/calendar?msg=Save+failed:+{out[:120]}", status_code=302)
+
+
+@app.get("/tools/calendar/delete")
+async def calendar_delete(uid: str):
+    ok, out = delete_calendar_event(uid)
+    if ok:
+        return RedirectResponse(url="/tools/calendar?msg=Event+deleted", status_code=302)
+    return RedirectResponse(url=f"/tools/calendar?msg=Delete+failed:+{out[:120]}", status_code=302)
+
+
+@app.get("/tools/calendar/from-attachment/{attachment_id}")
+async def calendar_from_attachment(attachment_id: int):
+    conn = connect_db()
+    row = conn.execute(
+        "SELECT messages.subject, messages.date, attachments.normalized_name FROM attachments JOIN messages ON attachments.message_uid=messages.uid WHERE attachments.id=?",
+        (attachment_id,),
+    ).fetchone()
+    if not row:
+        return RedirectResponse(url="/tools/calendar?msg=Attachment+not+found", status_code=302)
+
+    title = f"Review: {row['subject'] or row['normalized_name']}"
+    start = datetime.now().replace(second=0, microsecond=0)
+    end = start + timedelta(hours=1)
+    params = {
+        "title": title,
+        "start": start.strftime("%Y-%m-%dT%H:%M"),
+        "end": end.strftime("%Y-%m-%dT%H:%M"),
+        "notes": f"Linked attachment: {row['normalized_name']}",
+    }
+    from urllib.parse import urlencode
+    return RedirectResponse(url=f"/tools/calendar?{urlencode(params)}", status_code=302)
 
 
 @app.get("/tools/processes", response_class=HTMLResponse)

@@ -12,7 +12,7 @@ import tiktoken
 from dotenv import load_dotenv
 from openai import OpenAI
 
-BASE_DIR = os.path.expanduser("~/Documents/Email-Attachments")
+BASE_DIR = os.path.expanduser(os.getenv("EMAIL_ATTACHMENTS_BASE", "~/AutomationHub/email-filing"))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))

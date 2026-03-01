@@ -70,7 +70,7 @@
           <div class="stat-value">{{ stats.categories|length }}</div>
         </div>
       </div>
-      <form class="search" method="get">
+      <form class="search" method="get" action="/tools/email-filing">
         <input type="text" name="q" value="{{ query }}" placeholder="Search attachments" />
         <input type="hidden" name="category" value="{{ category }}" />
         <input type="hidden" name="sender" value="{{ sender }}" />
@@ -78,10 +78,10 @@
         <button type="submit">Search</button>
       </form>
       <div class="filters">
-        <a class="chip{% if not category %} active{% endif %}" href="/?q={{ query }}&sender={{ sender }}&tag={{ tag }}">All categories</a>
+        <a class="chip{% if not category %} active{% endif %}" href="/tools/email-filing?q={{ query }}&sender={{ sender }}&tag={{ tag }}">All categories</a>
         {% for row in stats.categories %}
           {% set cat = row['category'] or 'Unsorted' %}
-          <a class="chip{% if category == cat %} active{% endif %}" href="/?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }} ({{ row['c'] }})</a>
+          <a class="chip{% if category == cat %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }} ({{ row['c'] }})</a>
         {% endfor %}
       </div>
     </header>
@@ -89,10 +89,10 @@
     <div class="sections">
       <section>
         <div class="filters">
-          <a class="chip{% if not sender %} active{% endif %}" href="/?q={{ query }}&category={{ category }}&tag={{ tag }}">All senders</a>
+          <a class="chip{% if not sender %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ category }}&tag={{ tag }}">All senders</a>
           {% for row in stats.senders %}
             {% if row['sender'] %}
-            <a class="chip{% if sender == row['sender'] %} active{% endif %}" href="/?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ row['sender'] }} ({{ row['c'] }})</a>
+            <a class="chip{% if sender == row['sender'] %} active{% endif %}" href="/tools/email-filing?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ row['sender'] }} ({{ row['c'] }})</a>
             {% endif %}
           {% endfor %}
         </div>
@@ -133,7 +133,7 @@
             {% for row in stats.categories %}
               {% set cat = row['category'] or 'Unsorted' %}
               <div class="bucket-row">
-                <a href="/?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }}</a>
+                <a href="/tools/email-filing?q={{ query }}&category={{ cat }}&sender={{ sender }}&tag={{ tag }}">{{ cat }}</a>
                 <span>{{ row['c'] }}</span>
               </div>
             {% endfor %}
@@ -145,7 +145,7 @@
             {% for row in stats.senders %}
               {% if row['sender'] %}
               <div class="sender-row">
-                <a href="/?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ row['sender'] }}</a>
+                <a href="/tools/email-filing?q={{ query }}&category={{ category }}&tag={{ tag }}&sender={{ row['sender'] }}">{{ row['sender'] }}</a>
                 <span>{{ row['c'] }}</span>
               </div>
               {% endif %}
@@ -156,11 +156,11 @@
           <h3>Tags</h3>
           <div class="bucket-list">
             <div class="bucket-row">
-              <a href="/?q={{ query }}&category={{ category }}&sender={{ sender }}">All tags</a>
+              <a href="/tools/email-filing?q={{ query }}&category={{ category }}&sender={{ sender }}">All tags</a>
             </div>
             {% for row in stats.tags %}
               <div class="bucket-row">
-                <a href="/?q={{ query }}&category={{ category }}&sender={{ sender }}&tag={{ row['tag'] }}">{{ row['tag'] }}</a>
+                <a href="/tools/email-filing?q={{ query }}&category={{ category }}&sender={{ sender }}&tag={{ row['tag'] }}">{{ row['tag'] }}</a>
                 <span>{{ row['c'] }}</span>
               </div>
             {% endfor %}

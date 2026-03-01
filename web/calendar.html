@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Calendar · Dom Organiser Hub</title>
+  <style>
+    body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; margin:0; background:#f3f6fb; color:#0f172a; }
+    .shell { max-width:1100px; margin:0 auto; padding:2rem 1.2rem 3rem; }
+    nav { display:flex; gap:0.6rem; margin-bottom:1rem; }
+    nav a { text-decoration:none; padding:0.5rem 0.9rem; border-radius:999px; background:#e2e8f0; color:#0f172a; font-weight:600; }
+    nav a.active { background:#0f172a; color:#fff; }
+    .card { background:#fff; border:1px solid #dbe3f4; border-radius:14px; padding:1rem; margin:0.9rem 0; }
+    input, textarea, select { width:100%; padding:0.55rem 0.7rem; border-radius:10px; border:1px solid #cbd5e1; }
+    .grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:0.8rem; }
+    .btn { text-decoration:none; padding:0.5rem 0.8rem; border-radius:999px; background:#0f172a; color:#fff; font-size:0.85rem; border:none; cursor:pointer; display:inline-block; }
+    .btn.alt { background:#334155; }
+    .btn.danger { background:#991b1b; }
+    table { width:100%; border-collapse:collapse; }
+    td,th { text-align:left; border-bottom:1px solid #e2e8f0; padding:0.6rem 0.4rem; font-size:0.9rem; vertical-align:top; }
+    .actions { display:flex; gap:0.35rem; flex-wrap:wrap; }
+    .filters { display:flex; gap:0.4rem; margin-bottom:0.8rem; }
+    .chip { padding:0.3rem 0.75rem; border-radius:999px; text-decoration:none; background:#e2e8f0; color:#0f172a; font-weight:600; font-size:0.85rem; }
+    .chip.active { background:#0f172a; color:#fff; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav>
+      <a href="/">Hub</a>
+      <a href="/tools/email-filing">Email Filing</a>
+      <a href="/tools/processes">Processes</a>
+      <a href="/tools/calendar" class="active">Calendar</a>
+    </nav>
+
+    <h1>Calendar</h1>
+    <p>Connected to <strong>{{ calendar_name }}</strong> (Europe/London, default reminder 1 hour before).</p>
+    {% if msg %}<p><strong>{{ msg }}</strong></p>{% endif %}
+
+    <section class="card">
+      <h3>{% if edit_uid %}Edit event{% else %}Create event{% endif %}</h3>
+      <form method="get" action="/tools/calendar/save">
+        <input type="hidden" name="uid" value="{{ edit_uid }}" />
+        <div class="grid">
+          <div style="grid-column:1 / -1;"><input name="title" value="{{ form_title }}" placeholder="Event title" required /></div>
+          <div><label>Start</label><input name="start" type="datetime-local" value="{{ form_start }}" required /></div>
+          <div><label>End</label><input name="end" type="datetime-local" value="{{ form_end }}" required /></div>
+          <div style="grid-column:1 / -1;"><textarea name="notes" rows="3" placeholder="Notes (optional)">{{ form_notes }}</textarea></div>
+        </div>
+        <p style="margin-top:0.8rem; display:flex; gap:0.5rem;">
+          <button class="btn" type="submit">{% if edit_uid %}Save changes{% else %}Create event{% endif %}</button>
+          {% if edit_uid %}<a class="btn alt" href="/tools/calendar">Cancel edit</a>{% endif %}
+        </p>
+      </form>
+    </section>
+
+    <section class="card">
+      <h3>Upcoming</h3>
+      <div class="filters">
+        <a class="chip {% if window == 'today' %}active{% endif %}" href="/tools/calendar?window=today">Today</a>
+        <a class="chip {% if window == 'week' %}active{% endif %}" href="/tools/calendar?window=week">This week</a>
+        <a class="chip {% if window == '14d' %}active{% endif %}" href="/tools/calendar?window=14d">Next 14 days</a>
+      </div>
+      <table>
+        <thead><tr><th>Title</th><th>Start</th><th>End</th><th>Location</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for e in events %}
+          <tr>
+            <td>{{ e.title }}</td>
+            <td>{{ e.start }}</td>
+            <td>{{ e.end }}</td>
+            <td>{{ e.location }}</td>
+            <td>
+              <div class="actions">
+                <a class="btn alt" href="/tools/calendar?edit_uid={{ e.uid }}&window={{ window }}">Edit</a>
+                <a class="btn danger" href="/tools/calendar/delete?uid={{ e.uid }}">Delete</a>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5">No upcoming events found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+</body>
+</html>

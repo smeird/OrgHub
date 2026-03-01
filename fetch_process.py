@@ -20,7 +20,7 @@ from imap_tools import AND, MailBox
 from extract_text import extract_text_from_file
 from vectorize import chunk_and_embed
 
-BASE_DIR = pathlib.Path.home() / "Documents" / "Email-Attachments"
+BASE_DIR = pathlib.Path(os.getenv("EMAIL_ATTACHMENTS_BASE", str(pathlib.Path.home() / "AutomationHub" / "email-filing")))
 RAW_DIR = BASE_DIR / "raw"
 PROCESSED_DIR = BASE_DIR / "processed"
 LOG_FILE = BASE_DIR / "logs" / "ingest.log"
