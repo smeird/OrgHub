@@ -29,6 +29,8 @@ OBSIDIAN_CONFIG_PATH = pathlib.Path.home() / "Library/Application Support/obsidi
 
 START_YEAR = int(os.getenv("INGEST_START_YEAR", "2025"))
 SUMMARY_NOTES_FOLDER = os.getenv("OBSIDIAN_SUMMARY_FOLDER", "Email Summaries")
+SUPPLIERS_FOLDER = os.getenv("OBSIDIAN_SUPPLIERS_FOLDER", "Suppliers")
+SUPPLIERS_INDEX = os.getenv("OBSIDIAN_SUPPLIERS_INDEX", "Suppliers.md")
 
 CATEGORY_RULES = {
     "Finance": ["invoice", "statement", "receipt", "tax", "bank"],
@@ -189,6 +191,88 @@ def append_summary_line(
         note_path.write_text(header + line + "\n")
 
 
+
+def safe_note_name(text: str) -> str:
+    name = re.sub(r"[^A-Za-z0-9 _-]+", "", text or "").strip()
+    return name[:80] or "Unknown Supplier"
+
+
+def infer_supplier_name(sender: str) -> str:
+    display_name, email_addr = parseaddr(sender or "")
+    if display_name and display_name.strip():
+        return safe_note_name(display_name)
+
+    local, _, domain = (email_addr or "").partition("@")
+    if domain:
+        parts = [p for p in domain.split(".") if p and p not in {"www", "mail", "email", "co", "com", "org", "net"}]
+        if parts:
+            return safe_note_name(parts[0].replace("-", " ").title())
+    return safe_note_name(local.replace(".", " ").replace("_", " ").title())
+
+
+def should_create_supplier_note(subject: str, filename: str, category: str, tags: list[str]) -> bool:
+    if "Invoice" in tags:
+        return True
+    hay = f"{subject} {filename}".lower()
+    if "invoice" in hay:
+        return True
+    return category == "Finance" and any(k in hay for k in ["receipt", "statement"])
+
+
+def update_supplier_notes(
+    vault_path: Optional[pathlib.Path],
+    uid: int,
+    digest: str,
+    msg_date: datetime,
+    sender: str,
+    subject: str,
+    original_name: str,
+    category: str,
+    tags: list[str],
+) -> None:
+    if not vault_path:
+        return
+    if not should_create_supplier_note(subject, original_name, category, tags):
+        return
+
+    suppliers_dir = vault_path / SUPPLIERS_FOLDER
+    suppliers_dir.mkdir(parents=True, exist_ok=True)
+
+    supplier_name = infer_supplier_name(sender)
+    supplier_note = suppliers_dir / f"{supplier_name}.md"
+    suppliers_index = vault_path / SUPPLIERS_INDEX
+
+    date_text = msg_date.strftime("%Y-%m-%d")
+    compact_subject = (subject or "(no subject)").replace("\n", " ").strip()
+    tags_text = f" | tags: {', '.join(tags)}" if tags else ""
+    marker = f"<!-- ingest:{uid}:{digest[:12]} -->"
+    line = f"- {date_text} | Invoice | {compact_subject} | file: {original_name}{tags_text} {marker}"
+
+    if supplier_note.exists():
+        existing = supplier_note.read_text(errors="ignore")
+        if marker not in existing:
+            with supplier_note.open("a") as fh:
+                fh.write(line + "\n")
+    else:
+        header = (
+            f"# {supplier_name}\n\n"
+            f"- Sender: {sender}\n"
+            f"- First seen: {date_text}\n"
+            f"- Category: {category}\n\n"
+            f"## Activity\n"
+            f"{line}\n"
+        )
+        supplier_note.write_text(header)
+
+    link_line = f"- [[{SUPPLIERS_FOLDER}/{supplier_name}|{supplier_name}]]"
+    if suppliers_index.exists():
+        idx = suppliers_index.read_text(errors="ignore")
+        if link_line not in idx:
+            with suppliers_index.open("a") as fh:
+                fh.write(link_line + "\n")
+    else:
+        suppliers_index.write_text("# Suppliers\n\n" + link_line + "\n")
+
 def process_attachment(conn: sqlite3.Connection, vault_path: Optional[pathlib.Path], uid: int, msg, att) -> bool:
     msg_date = msg.date or datetime.now()
     sender = msg.from_ or "unknown"
@@ -248,6 +332,7 @@ def process_attachment(conn: sqlite3.Connection, vault_path: Optional[pathlib.Pa
 
     chunk_and_embed(conn, attachment_id, extracted_text)
     append_summary_line(vault_path, msg_date, sender, subject, original_name, category, tags)
+    update_supplier_notes(vault_path, uid, digest, msg_date, sender, subject, original_name, category, tags)
     return True
 
 
