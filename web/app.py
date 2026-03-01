@@ -298,6 +298,26 @@ end run
     return (res.returncode == 0 and output == "DELETED", output)
 
 
+
+
+def infer_supplier_name(sender: str) -> str:
+    from email.utils import parseaddr
+    import re
+
+    display_name, email_addr = parseaddr(sender or "")
+    if display_name and display_name.strip():
+        base = display_name
+    else:
+        local, _, domain = (email_addr or "").partition("@")
+        if domain:
+            parts = [p for p in domain.split(".") if p and p not in {"www", "mail", "email", "co", "com", "org", "net"}]
+            base = (parts[0] if parts else local).replace("-", " ").replace("_", " ")
+        else:
+            base = local or "Unknown Supplier"
+
+    base = re.sub(r"[^A-Za-z0-9 _-]+", "", base).strip()
+    return (base[:80] or "Unknown Supplier").title()
+
 def cosine_similarity(vec_a, vec_b):
     from math import sqrt
 
@@ -658,4 +678,21 @@ async def attachment_detail(request: Request, attachment_id: int):
     text_content = ""
     if text_path and os.path.exists(text_path):
         text_content = Path(text_path).read_text(errors="ignore")
-    return templates.TemplateResponse("detail.html", {"request": request, "attachment": row, "text_content": text_content, "active_nav": "email"})
+
+    vault_name, _vault_path = resolve_obsidian_vault()
+    supplier_name = infer_supplier_name(row["sender"] or "")
+    supplier_rel = f"Suppliers/{supplier_name}.md"
+    from urllib.parse import quote
+    supplier_note_url = f"obsidian://open?vault={quote(vault_name)}&file={quote(supplier_rel)}" if vault_name else ""
+
+    return templates.TemplateResponse(
+        "detail.html",
+        {
+            "request": request,
+            "attachment": row,
+            "text_content": text_content,
+            "active_nav": "email",
+            "supplier_name": supplier_name,
+            "supplier_note_url": supplier_note_url,
+        },
+    )

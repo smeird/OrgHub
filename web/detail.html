@@ -25,6 +25,9 @@
         <a class="btn" href="file://{{ attachment.path_raw }}" target="_blank">Reveal in Finder</a>
       {% endif %}
       <a class="btn" href="/tools/calendar/from-attachment/{{ attachment.id }}">Create calendar event</a>
+      {% if supplier_note_url %}
+        <a class="btn" href="{{ supplier_note_url }}">Open supplier note ({{ supplier_name }})</a>
+      {% endif %}
     </div>
     {% if text_content %}
       <pre>{{ text_content }}</pre>
