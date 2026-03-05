@@ -11,7 +11,7 @@ import mimetypes
 import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Request
@@ -20,6 +20,15 @@ from pydantic import BaseModel
 from starlette.templating import Jinja2Templates
 
 from vectorize import embed_texts
+from vip import (
+    ensure_vip_schema,
+    upsert_vip,
+    list_vips,
+    get_vip,
+    delete_vip,
+    recent_vip_audit,
+    match_vip,
+)
 
 BASE_DIR = Path(os.getenv("EMAIL_ATTACHMENTS_BASE", str(Path.home() / "AutomationHub" / "email-filing")))
 DB_PATH = BASE_DIR / "attachments.db"
@@ -48,9 +57,25 @@ class SearchResult(BaseModel):
     path_raw: str
 
 
+class VipPayload(BaseModel):
+    display_name: str
+    email: str
+    domain: Optional[str] = None
+    tier: Optional[str] = "standard"
+    active: bool = True
+    notes: Optional[str] = ""
+    always_notify: bool = True
+    digest_only: bool = False
+    auto_label: Optional[str] = "VIP"
+    never_archive: bool = True
+    sla_minutes: Optional[int] = None
+    priority_score: int = 0
+
+
 def connect_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    ensure_vip_schema(conn)
     return conn
 
 
@@ -472,22 +497,124 @@ def list_processes() -> list[dict]:
     return items
 
 
+def get_hub_health(processes: list[dict], stats: dict) -> dict:
+    now = datetime.now()
+    failed = sum(1 for p in processes if p.get("last_exit_code") not in (None, 0))
+    not_loaded = sum(1 for p in processes if p.get("state") == "not_loaded")
+
+    stale = []
+    latest = stats.get("latest")
+    if latest:
+        try:
+            ts = datetime.fromisoformat(str(latest).replace("Z", "+00:00").replace(" ", "T").split("+")[0])
+            age_h = (now - ts).total_seconds() / 3600
+            if age_h > 24:
+                stale.append(f"Email ingest stale ({int(age_h)}h)")
+        except Exception:
+            pass
+
+    if not_loaded:
+        stale.append(f"{not_loaded} process{'es' if not_loaded != 1 else ''} not_loaded")
+
+    return {
+        "status": "Attention" if (failed or stale) else "Healthy",
+        "failed_jobs": failed,
+        "stale_modules": stale,
+        "last_ingest": latest or "N/A",
+        "processes_total": len(processes),
+    }
+
+
+def add_reminder(title: str, notes: str = "") -> tuple[bool, str]:
+    script = '''
+on run argv
+  set listName to "Reminders"
+  set rTitle to item 1 of argv
+  set rNotes to item 2 of argv
+  tell application "Reminders"
+    if not (exists list listName) then
+      make new list with properties {name:listName}
+    end if
+    tell list listName
+      set r to make new reminder with properties {name:rTitle}
+      if rNotes is not "" then set body of r to rNotes
+    end tell
+  end tell
+  return "OK"
+end run
+'''
+    res = run_osascript(script, [title, notes])
+    out = (res.stdout or "").strip() or (res.stderr or "").strip()
+    return (res.returncode == 0 and out == "OK", out)
+
+
+def upsert_attachment_tags(conn: sqlite3.Connection, attachment_id: int, add_tags: list[str]) -> str:
+    row = conn.execute("SELECT tags FROM attachments WHERE id=?", (attachment_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    existing = {t.strip() for t in (row["tags"] or "").split(",") if t.strip()}
+    for t in add_tags:
+        if t:
+            existing.add(t.strip())
+    new_tags = ",".join(sorted(existing))
+    conn.execute("UPDATE attachments SET tags=? WHERE id=?", (new_tags, attachment_id))
+    conn.commit()
+    return new_tags
+
+
+def create_note_for_attachment(attachment_row: sqlite3.Row, text_content: str) -> tuple[bool, str, str]:
+    vault_name, vault_path = resolve_obsidian_vault()
+    if not vault_name or not vault_path:
+        return False, "", "Obsidian vault not configured"
+
+    notes_dir = vault_path / "Inbox" / "Attachment Notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = (attachment_row["normalized_name"] or f"attachment-{attachment_row['id']}").replace("/", "-")
+    note_path = notes_dir / f"{safe_name}.md"
+
+    excerpt = (text_content or "").strip()[:1200]
+    body = [
+        f"# {safe_name}",
+        "",
+        f"- Sender: {attachment_row['sender']}",
+        f"- Subject: {attachment_row['subject']}",
+        f"- Date: {attachment_row['date']}",
+        f"- Attachment ID: {attachment_row['id']}",
+        f"- Original file: {attachment_row['path_raw']}",
+        "",
+        "## Notes",
+        "",
+        "",
+        "## Extract (preview)",
+        excerpt or "(no extracted text)",
+    ]
+    if not note_path.exists():
+        note_path.write_text("\n".join(body))
+
+    note_rel = note_path.relative_to(vault_path).as_posix()
+    url = f"obsidian://open?vault={quote(vault_name)}&file={quote(note_rel)}"
+    return True, url, "OK"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
     conn = connect_db()
     stats = get_stats(conn)
-    process_count = len(list_processes())
+    processes = list_processes()
+    process_count = len(processes)
+    health = get_hub_health(processes, stats)
     modules = [
         {"name": "Email Filing", "status": "Live", "desc": "Search and triage email attachments.", "href": "/tools/email-filing"},
         {"name": "Processes", "status": "Live", "desc": f"Manage automations ({process_count} configured).", "href": "/tools/processes"},
         {"name": "Calendar", "status": "Live", "desc": "BundyFamily calendar (RW) with 1-hour reminders.", "href": "/tools/calendar"},
         {"name": "Notes", "status": "Live", "desc": "Browse and search Obsidian notes.", "href": "/tools/notes"},
+        {"name": "VIP Hub", "status": "Live", "desc": "Manage VIP sender rules + match audit.", "href": "/tools/vip-hub"},
         {"name": "Tasks", "status": "Planned", "desc": "Upcoming task workflows.", "href": "#"},
     ]
     runtime_path = str(BASE_DIR)
     canonical_path = str(Path.home() / "AutomationHub" / "email-filing")
     path_status = "Running from canonical path" if runtime_path == canonical_path else f"Running from non-canonical path: {runtime_path}"
-    return templates.TemplateResponse("hub.html", {"request": request, "stats": stats, "modules": modules, "active_nav": "hub", "path_status": path_status, "runtime_path": runtime_path})
+    return templates.TemplateResponse("hub.html", {"request": request, "stats": stats, "modules": modules, "health": health, "active_nav": "hub", "path_status": path_status, "runtime_path": runtime_path})
 
 
 @app.get("/tools/calendar", response_class=HTMLResponse)
@@ -566,7 +693,6 @@ async def calendar_from_attachment(attachment_id: int):
         "end": end.strftime("%Y-%m-%dT%H:%M"),
         "notes": f"Linked attachment: {row['normalized_name']}",
     }
-    from urllib.parse import urlencode
     return RedirectResponse(url=f"/tools/calendar?{urlencode(params)}", status_code=302)
 
 
@@ -589,6 +715,114 @@ async def notes_view(request: Request, q: str = "", msg: str = ""):
             "notes": notes,
         },
     )
+
+
+@app.get("/tools/vip-hub", response_class=HTMLResponse)
+async def vip_hub(request: Request, msg: str = "", edit_id: int = 0, test_email: str = ""):
+    conn = connect_db()
+    vips = list_vips(conn)
+    logs = recent_vip_audit(conn, limit=40)
+    edit_vip = get_vip(conn, edit_id) if edit_id else None
+    test_result = match_vip(conn, test_email) if test_email.strip() else None
+    return templates.TemplateResponse(
+        "vip.html",
+        {
+            "request": request,
+            "active_nav": "vip",
+            "msg": msg,
+            "vips": vips,
+            "logs": logs,
+            "edit_vip": edit_vip,
+            "test_email": test_email,
+            "test_result": test_result,
+        },
+    )
+
+
+@app.get("/tools/vip-hub/save")
+async def vip_save(
+    id: int = 0,
+    display_name: str = "",
+    email: str = "",
+    domain: str = "",
+    tier: str = "standard",
+    notes: str = "",
+    auto_label: str = "VIP",
+    sla_minutes: str = "",
+    priority_score: int = 0,
+    active: Optional[str] = None,
+    always_notify: Optional[str] = None,
+    digest_only: Optional[str] = None,
+    never_archive: Optional[str] = None,
+):
+    conn = connect_db()
+    payload = {
+        "display_name": display_name,
+        "email": email,
+        "domain": domain,
+        "tier": tier,
+        "notes": notes,
+        "auto_label": auto_label,
+        "sla_minutes": sla_minutes,
+        "priority_score": priority_score,
+        "active": active is not None,
+        "always_notify": always_notify is not None,
+        "digest_only": digest_only is not None,
+        "never_archive": never_archive is not None,
+    }
+    try:
+        vip_id = upsert_vip(conn, payload, vip_id=id or None)
+    except Exception as e:
+        return RedirectResponse(url=f"/tools/vip-hub?msg=Save+failed:+{quote(str(e)[:120])}", status_code=302)
+
+    return RedirectResponse(url=f"/tools/vip-hub?msg=Saved+VIP+{vip_id}", status_code=302)
+
+
+@app.get("/tools/vip-hub/delete")
+async def vip_delete(id: int):
+    conn = connect_db()
+    ok = delete_vip(conn, id)
+    msg = "VIP+deleted" if ok else "VIP+not+found"
+    return RedirectResponse(url=f"/tools/vip-hub?msg={msg}", status_code=302)
+
+
+@app.get("/api/vips")
+async def api_vips():
+    conn = connect_db()
+    return [dict(r) for r in list_vips(conn)]
+
+
+@app.post("/api/vips")
+async def api_create_vip(payload: VipPayload):
+    conn = connect_db()
+    try:
+        vip_id = upsert_vip(conn, payload.model_dump(), vip_id=None)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"id": vip_id}
+
+
+@app.put("/api/vips/{vip_id}")
+async def api_update_vip(vip_id: int, payload: VipPayload):
+    conn = connect_db()
+    try:
+        out_id = upsert_vip(conn, payload.model_dump(), vip_id=vip_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"id": out_id}
+
+
+@app.delete("/api/vips/{vip_id}")
+async def api_delete_vip(vip_id: int):
+    conn = connect_db()
+    return {"deleted": delete_vip(conn, vip_id)}
+
+
+@app.get("/api/vips/test-match")
+async def api_vip_test_match(email: str):
+    conn = connect_db()
+    match = match_vip(conn, email)
+    return {"matched": bool(match), "result": match}
 
 
 @app.get("/tools/processes", response_class=HTMLResponse)
@@ -665,11 +899,58 @@ async def preview(attachment_id: int):
     return FileResponse(file_path, media_type=mime or "application/octet-stream")
 
 
-@app.get("/attachment/{attachment_id}", response_class=HTMLResponse)
-async def attachment_detail(request: Request, attachment_id: int):
+@app.get("/tools/reminders/from-attachment/{attachment_id}")
+async def reminder_from_attachment(attachment_id: int):
+    conn = connect_db()
+    row = conn.execute(
+        "SELECT attachments.id, attachments.normalized_name, messages.subject, messages.sender, messages.date FROM attachments JOIN messages ON attachments.message_uid=messages.uid WHERE attachments.id=?",
+        (attachment_id,),
+    ).fetchone()
+    if not row:
+        return RedirectResponse(url="/tools/email-filing?msg=Attachment+not+found", status_code=302)
+
+    title = f"Review: {row['subject'] or row['normalized_name']}"
+    notes = f"From {row['sender']} on {row['date']} (attachment #{row['id']})"
+    ok, out = add_reminder(title, notes)
+    if ok:
+        return RedirectResponse(url=f"/attachment/{attachment_id}?msg=Reminder+created", status_code=302)
+    return RedirectResponse(url=f"/attachment/{attachment_id}?msg=Reminder+failed:+{quote(out[:120])}", status_code=302)
+
+
+@app.get("/tools/notes/from-attachment/{attachment_id}")
+async def note_from_attachment(attachment_id: int):
     conn = connect_db()
     row = conn.execute(
         "SELECT attachments.*, messages.subject, messages.sender, messages.date FROM attachments JOIN messages ON attachments.message_uid = messages.uid WHERE attachments.id=?",
+        (attachment_id,),
+    ).fetchone()
+    if not row:
+        return RedirectResponse(url="/tools/email-filing?msg=Attachment+not+found", status_code=302)
+
+    text_content = ""
+    text_path = row["path_text"]
+    if text_path and os.path.exists(text_path):
+        text_content = Path(text_path).read_text(errors="ignore")
+
+    ok, note_url, out = create_note_for_attachment(row, text_content)
+    if ok:
+        return RedirectResponse(url=note_url, status_code=302)
+    return RedirectResponse(url=f"/attachment/{attachment_id}?msg=Note+failed:+{quote(out[:120])}", status_code=302)
+
+
+@app.get("/attachment/{attachment_id}/followup")
+async def mark_followup(attachment_id: int):
+    conn = connect_db()
+    stamp = datetime.now().strftime("followup-%Y%m%d")
+    upsert_attachment_tags(conn, attachment_id, ["follow-up", "action-needed", stamp])
+    return RedirectResponse(url=f"/attachment/{attachment_id}?msg=Marked+for+follow-up", status_code=302)
+
+
+@app.get("/attachment/{attachment_id}", response_class=HTMLResponse)
+async def attachment_detail(request: Request, attachment_id: int, msg: str = ""):
+    conn = connect_db()
+    row = conn.execute(
+        "SELECT attachments.*, messages.subject, messages.sender, messages.date, messages.vip_contact_id, messages.vip_match_type, messages.vip_actions_json, messages.vip_matched_at FROM attachments JOIN messages ON attachments.message_uid = messages.uid WHERE attachments.id=?",
         (attachment_id,),
     ).fetchone()
     if not row:
@@ -684,6 +965,12 @@ async def attachment_detail(request: Request, attachment_id: int):
     supplier_rel = f"Suppliers/{supplier_name}.md"
     from urllib.parse import quote
     supplier_note_url = f"obsidian://open?vault={quote(vault_name)}&file={quote(supplier_rel)}" if vault_name else ""
+    vip_actions = {}
+    if row["vip_actions_json"]:
+        try:
+            vip_actions = json.loads(row["vip_actions_json"])
+        except Exception:
+            vip_actions = {}
 
     return templates.TemplateResponse(
         "detail.html",
@@ -694,5 +981,7 @@ async def attachment_detail(request: Request, attachment_id: int):
             "active_nav": "email",
             "supplier_name": supplier_name,
             "supplier_note_url": supplier_note_url,
+            "vip_actions": vip_actions,
+            "msg": msg,
         },
     )

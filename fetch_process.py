@@ -19,6 +19,7 @@ from imap_tools import AND, MailBox
 
 from extract_text import extract_text_from_file
 from vectorize import chunk_and_embed
+from vip import ensure_vip_schema, apply_vip_match_to_message
 
 BASE_DIR = pathlib.Path(os.getenv("EMAIL_ATTACHMENTS_BASE", str(pathlib.Path.home() / "AutomationHub" / "email-filing")))
 RAW_DIR = BASE_DIR / "raw"
@@ -91,6 +92,7 @@ def checksum(path: pathlib.Path) -> str:
 def connect_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON;")
+    ensure_vip_schema(conn)
     return conn
 
 
@@ -323,14 +325,29 @@ def process_attachment(conn: sqlite3.Connection, vault_path: Optional[pathlib.Pa
     text_path = PROCESSED_DIR / str(msg_date.year) / str(uid)
     text_path.mkdir(parents=True, exist_ok=True)
     text_file = text_path / f"{normalized}.txt"
-    extracted_text = extract_text_from_file(raw_path, att.content_type)
-    text_file.write_text(extracted_text)
-    conn.execute(
-        "UPDATE attachments SET path_text=?, status=?, updated_at=datetime('now') WHERE id=?",
-        (str(text_file), "extracted", attachment_id),
-    )
 
-    chunk_and_embed(conn, attachment_id, extracted_text)
+    try:
+        extracted_text = extract_text_from_file(raw_path, att.content_type)
+    except Exception as e:
+        extracted_text = ""
+        log(f"extract failed for {original_name} uid={uid}: {e}")
+        conn.execute(
+            "UPDATE attachments SET status=?, updated_at=datetime('now') WHERE id=?",
+            ("extract_failed", attachment_id),
+        )
+    else:
+        text_file.write_text(extracted_text)
+        conn.execute(
+            "UPDATE attachments SET path_text=?, status=?, updated_at=datetime('now') WHERE id=?",
+            (str(text_file), "extracted", attachment_id),
+        )
+
+    if extracted_text:
+        try:
+            chunk_and_embed(conn, attachment_id, extracted_text)
+        except Exception as e:
+            log(f"embed failed for {original_name} uid={uid}: {e}")
+
     append_summary_line(vault_path, msg_date, sender, subject, original_name, category, tags)
     update_supplier_notes(vault_path, uid, digest, msg_date, sender, subject, original_name, category, tags)
     return True
@@ -366,6 +383,19 @@ def main() -> None:
                 continue
 
             save_message(conn, uid, msg)
+            vip_match = apply_vip_match_to_message(
+                conn,
+                uid=uid,
+                message_id=getattr(msg, "message_id", "") or "",
+                thread_id=getattr(msg, "thread_id", "") or "",
+                sender_header=msg.from_ or "",
+            )
+            if vip_match:
+                log(
+                    f"VIP match uid={uid} sender={vip_match['from_email']} type={vip_match['match_type']} "
+                    f"vip_id={vip_match['vip_contact_id']}"
+                )
+
             for att in msg.attachments:
                 if process_attachment(conn, vault_path, uid, msg, att):
                     processed += 1

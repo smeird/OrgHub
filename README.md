@@ -17,6 +17,7 @@ It ingests attachments from iCloud Mail, extracts text from common file types, c
   - filter by category/sender/tag
   - preview/download source attachments
 - Includes a process-management module for automation scripts
+- Includes a VIP Hub for sender prioritization, IMAP match actions, and audit trails
 
 ## Architecture
 
@@ -34,8 +35,11 @@ flowchart TD
     G --> C
 
     C --> H[web/app.py FastAPI]
-    H --> I[Web UI pages<br>Hub + Email Filing + Processes]
+    H --> I[Web UI pages<br>Hub + Email Filing + Processes + VIP Hub]
     I --> J[User search/filter/preview]
+
+    B --> L[VIP sender matcher]
+    L --> C
 
     H --> K[AutomationHub process_manager.py]
     K --> I
@@ -78,6 +82,28 @@ Typical `.env` keys used by the project:
 - `INGEST_START_YEAR` (optional)
 - `OBSIDIAN_SUMMARY_FOLDER` (optional)
 - `OBSIDIAN_VAULT_PATH` (optional)
+
+## VIP Hub
+
+- UI: `/tools/vip-hub`
+- Purpose: maintain VIP sender rules used during IMAP ingest.
+
+### Matching behavior
+
+1. Sender email is normalized from the message `From` header (lowercased address only).
+2. Match order is deterministic:
+   - exact `email` match first
+   - then `domain` fallback match
+3. If multiple rules qualify, highest `priority_score` wins; ties break by lowest `id`.
+4. Applied actions (`always_notify`, `digest_only`, `auto_label`, `never_archive`, `sla_minutes`, `priority_score`, `tier`) are stored on the message metadata and in `vip_match_audit`.
+
+### Data storage
+
+The app auto-creates/maintains these SQLite structures in `attachments.db`:
+
+- `vip_contacts`
+- `vip_match_audit`
+- message metadata columns: `vip_contact_id`, `vip_match_type`, `vip_actions_json`, `vip_matched_at`
 
 ## Notes
 

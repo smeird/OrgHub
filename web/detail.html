@@ -9,8 +9,9 @@
     a { color:#2563eb; text-decoration:none; }
     h1 { margin-bottom:0.2rem; }
     .meta { color:#64748b; margin-bottom:1rem; }
-    .actions { display:flex; gap:0.8rem; margin-bottom:1.5rem; }
+    .actions { display:flex; gap:0.8rem; margin-bottom:1.5rem; flex-wrap:wrap; }
     .btn { padding:0.6rem 1rem; border-radius:999px; border:1px solid #cbd5f5; background:white; font-weight:600; }
+    .flash { background:#ecfeff; border:1px solid #bae6fd; color:#0c4a6e; padding:0.7rem 0.9rem; border-radius:10px; margin:0.6rem 0 1rem; }
     pre { background:white; border-radius:14px; padding:1rem; border:1px solid #e2e8f0; white-space:pre-wrap; }
   </style>
 </head>
@@ -19,12 +20,22 @@
     <a href="/tools/email-filing">← Back to Email Filing</a> · <a href="/">Hub</a>
     <h1>{{ attachment.normalized_name }}</h1>
     <p class="meta">{{ attachment.subject }} — {{ attachment.sender }} ({{ attachment.date }})</p>
+    {% if msg %}<div class="flash">{{ msg }}</div>{% endif %}
+    {% if attachment.vip_contact_id %}
+      <div class="flash" style="background:#eef2ff;border-color:#c7d2fe;color:#312e81;">
+        VIP matched: #{{ attachment.vip_contact_id }} via <strong>{{ attachment.vip_match_type }}</strong>
+        {% if vip_actions %} · actions: <code>{{ vip_actions }}</code>{% endif %}
+      </div>
+    {% endif %}
     <div class="actions">
       <a class="btn" href="/preview/{{ attachment.id }}" target="_blank">Open original</a>
       {% if attachment.path_raw %}
         <a class="btn" href="file://{{ attachment.path_raw }}" target="_blank">Reveal in Finder</a>
       {% endif %}
       <a class="btn" href="/tools/calendar/from-attachment/{{ attachment.id }}">Create calendar event</a>
+      <a class="btn" href="/tools/reminders/from-attachment/{{ attachment.id }}">Create reminder</a>
+      <a class="btn" href="/tools/notes/from-attachment/{{ attachment.id }}">Create/Open note</a>
+      <a class="btn" href="/attachment/{{ attachment.id }}/followup">Mark follow-up</a>
       {% if supplier_note_url %}
         <a class="btn" href="{{ supplier_note_url }}">Open supplier note ({{ supplier_name }})</a>
       {% endif %}

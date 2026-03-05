@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>VIP Hub</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+:root{--bg1:#eff3fa;--bg2:#dbe8fb;--panel:#0b1220;--panel2:#111a2b;--card:#ffffffd9;--line:#cfdaef;--muted:#5f6f86;--accent:#2f6df6}
+*{box-sizing:border-box} body{margin:0;font-family:'IBM Plex Sans',sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2)) fixed}
+.layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;background:linear-gradient(180deg,var(--panel),var(--panel2));padding:12px}
+.brand{color:#dbe7ff;font-weight:700;margin:6px 0 12px}.nav a{display:block;color:#bfd0f0;text-decoration:none;padding:8px 10px;border-radius:10px;margin-bottom:4px;font-weight:600}.nav a.active,.nav a:hover{background:#1f2d46;color:#fff}
+.main{padding:12px 14px 18px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+input,textarea,select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px}textarea{min-height:66px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.btn{padding:8px 12px;border:none;border-radius:9px;background:linear-gradient(135deg,#2563eb,#4f46e5);color:white;font-weight:700;cursor:pointer}.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:.88rem}th,td{text-align:left;border-bottom:1px solid #dbe5f4;padding:7px;vertical-align:top} code{background:#eef2ff;padding:1px 5px;border-radius:6px}
+</style></head>
+<body><div class="layout"><aside class="sidebar"><div class="brand">Dom Organiser Hub</div><nav class="nav"><a href="/">Hub</a><a href="/tools/email-filing">Email Filing</a><a href="/tools/processes">Processes</a><a href="/tools/calendar">Calendar</a><a href="/tools/notes">Notes</a><a href="/tools/vip-hub" class="active">VIP Hub</a></nav></aside>
+<main class="main">
+  <h1 style="margin:0">VIP Hub</h1><p class="muted">Manage sender-based VIP routing rules for IMAP ingestion.</p>
+  {% if msg %}<div class="card" style="background:#ecfeff">{{ msg }}</div>{% endif %}
+
+  <section class="card">
+    <h3 style="margin:0 0 8px">{{ 'Edit VIP #' ~ edit_vip['id'] if edit_vip else 'Add VIP' }}</h3>
+    <form method="get" action="/tools/vip-hub/save">
+      <input type="hidden" name="id" value="{{ edit_vip['id'] if edit_vip else 0 }}" />
+      <div class="grid">
+        <div><label>Display name</label><input name="display_name" required value="{{ edit_vip['display_name'] if edit_vip else '' }}" /></div>
+        <div><label>Exact email</label><input name="email" type="email" required value="{{ edit_vip['email'] if edit_vip else '' }}" /></div>
+        <div><label>Domain fallback</label><input name="domain" placeholder="example.com" value="{{ edit_vip['domain'] if edit_vip else '' }}" /></div>
+        <div><label>Tier</label><input name="tier" value="{{ edit_vip['tier'] if edit_vip else 'standard' }}" /></div>
+        <div><label>Auto label</label><input name="auto_label" value="{{ edit_vip['auto_label'] if edit_vip else 'VIP' }}" /></div>
+        <div><label>SLA (minutes)</label><input name="sla_minutes" type="number" min="0" value="{{ edit_vip['sla_minutes'] if edit_vip and edit_vip['sla_minutes'] is not none else '' }}" /></div>
+        <div><label>Priority score</label><input name="priority_score" type="number" value="{{ edit_vip['priority_score'] if edit_vip else 0 }}" /></div>
+        <div><label>Notes</label><textarea name="notes">{{ edit_vip['notes'] if edit_vip else '' }}</textarea></div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">
+        <label><input type="checkbox" name="active" {% if not edit_vip or edit_vip['active'] %}checked{% endif %}/> Active</label>
+        <label><input type="checkbox" name="always_notify" {% if not edit_vip or edit_vip['always_notify'] %}checked{% endif %}/> Always notify</label>
+        <label><input type="checkbox" name="digest_only" {% if edit_vip and edit_vip['digest_only'] %}checked{% endif %}/> Digest only</label>
+        <label><input type="checkbox" name="never_archive" {% if not edit_vip or edit_vip['never_archive'] %}checked{% endif %}/> Never archive</label>
+      </div>
+      <div style="margin-top:8px"><button class="btn" type="submit">Save VIP</button> {% if edit_vip %}<a href="/tools/vip-hub" style="margin-left:10px">Cancel edit</a>{% endif %}</div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h3 style="margin:0 0 8px">Test match</h3>
+    <form method="get" action="/tools/vip-hub" style="display:flex;gap:8px;align-items:center">
+      <input type="email" name="test_email" placeholder="sender@example.com" value="{{ test_email }}" />
+      <button class="btn" type="submit">Test</button>
+    </form>
+    {% if test_email %}
+      <p>{% if test_result %}Matched <strong>{{ test_result['display_name'] }}</strong> via <code>{{ test_result['match_type'] }}</code>. Actions: <code>{{ test_result['actions'] }}</code>{% else %}<span class="muted">No VIP match for {{ test_email }}</span>{% endif %}</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h3 style="margin:0 0 8px">VIP Contacts</h3>
+    <table><thead><tr><th>ID</th><th>Name</th><th>Email / Domain</th><th>Priority</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+      {% for v in vips %}
+      <tr>
+        <td>{{ v['id'] }}</td><td>{{ v['display_name'] }}</td><td><div>{{ v['email'] }}</div><div class="muted">{{ v['domain'] or '—' }}</div></td><td>{{ v['priority_score'] }}</td><td>{{ 'Active' if v['active'] else 'Disabled' }}</td>
+        <td><a href="/tools/vip-hub?edit_id={{ v['id'] }}">Edit</a> · <a href="/tools/vip-hub/delete?id={{ v['id'] }}" onclick="return confirm('Delete VIP #{{ v['id'] }}?')">Delete</a></td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </section>
+
+  <section class="card">
+    <h3 style="margin:0 0 8px">Recent VIP match audit</h3>
+    <table><thead><tr><th>Time</th><th>From</th><th>Matched VIP</th><th>Type</th><th>Actions</th></tr></thead><tbody>
+      {% for l in logs %}
+      <tr><td>{{ l['created_at'] }}</td><td>{{ l['from_email'] }}</td><td>{{ l['display_name'] or ('#' ~ l['vip_contact_id']) }}</td><td>{{ l['match_type'] }}</td><td><code>{{ l['actions_json'] }}</code></td></tr>
+      {% endfor %}
+    </tbody></table>
+  </section>
+</main></div></body></html>

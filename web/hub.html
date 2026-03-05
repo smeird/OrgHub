@@ -34,13 +34,19 @@
   <aside class="sidebar">
     <div class="brand">Dom Organiser Hub</div>
     <nav class="nav">
-      <a href="/" class="active">Hub</a><a href="/tools/email-filing">Email Filing</a><a href="/tools/processes">Processes</a><a href="/tools/calendar">Calendar</a><a href="/tools/notes">Notes</a>
+      <a href="/" class="active">Hub</a><a href="/tools/email-filing">Email Filing</a><a href="/tools/processes">Processes</a><a href="/tools/calendar">Calendar</a><a href="/tools/notes">Notes</a><a href="/tools/vip-hub">VIP Hub</a>
     </nav>
     <button class="tog" onclick="toggleDense()">Toggle density</button>
   </aside>
   <main class="main">
     <div class="toolbar"><h1 style="margin:0">Overview</h1><span class="muted">Scientific UI theme</span></div>
     {% if path_status %}<div class="card" style="margin-top:8px;color:#166534;border-color:#b8eac6;background:#edfff2">{{ path_status }}</div>{% endif %}
+    <div class="card" style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+      <div><span class="label">Hub health</span><div class="value" style="font-size:1rem">{{ health.status }}</div></div>
+      <div><span class="label">Failed jobs</span><div class="value" style="font-size:1rem">{{ health.failed_jobs }}</div></div>
+      <div><span class="label">Last ingest</span><div class="value" style="font-size:1rem">{{ health.last_ingest }}</div></div>
+      <div style="min-width:240px"><span class="label">Stale modules</span><div class="muted">{% if health.stale_modules %}{{ health.stale_modules | join(', ') }}{% else %}None{% endif %}</div></div>
+    </div>
     <div class="grid">
       <div class="card"><div class="label">Attachments</div><div class="value">{{ stats.attachments }}</div></div>
       <div class="card"><div class="label">Text Chunks</div><div class="value">{{ stats.chunks }}</div></div>
